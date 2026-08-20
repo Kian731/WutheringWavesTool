@@ -274,7 +274,7 @@
       grid.innerHTML = list.map(function (c) {
         return '<a class="card r' + c.r + '" href="character.html?id=' + encodeURIComponent(c.id) + '">' +
           thumb(c.icon, c.name) +
-          '<span class="badge-el" style="background:' + EL_COLOR[c.el] + '">' +
+          '<span class="badge-el" style="border-color:' + EL_COLOR[c.el] + ';color:' + EL_COLOR[c.el] + '">' +
           '<img src="' + esc(c.elIc) + '" alt="" onerror="this.remove()">' + c.el + '</span>' +
           (c.tier ? '<span class="badge-tier t-' + c.tier + '">' + c.tier + '</span>' : '') +
           '<span class="badge-role">' + esc(c.role[0]) + '</span>' +
@@ -596,7 +596,7 @@
     var neu = byId('newest');
     if (neu) neu.innerHTML = w.WW_CHARACTERS.slice(0, 8).map(function (c) {
       return '<a class="card r' + c.r + '" href="character.html?id=' + c.id + '">' + thumb(c.icon, c.name) +
-        '<span class="badge-el" style="background:' + EL_COLOR[c.el] + '"><img src="' + esc(c.elIc) + '" alt="" onerror="this.remove()">' + c.el + '</span>' +
+        '<span class="badge-el" style="border-color:' + EL_COLOR[c.el] + ';color:' + EL_COLOR[c.el] + '"><img src="' + esc(c.elIc) + '" alt="" onerror="this.remove()">' + c.el + '</span>' +
         '<div class="cbody"><div class="cname">' + esc(c.name) + '</div>' +
         '<div class="cmeta"><span class="stars">' + stars(c.r) + '</span>' + icon(c.wpIc, c.wp) + '</div></div></a>';
     }).join('');
@@ -667,13 +667,15 @@
   }
 
   /* ================= 頭像挑選器 ================= */
-  function picker(kind, onPick, filterFn) {
+  function picker(kind, onPick, filterFn, opts) {
+    opts = opts || {};
     var list = kind === 'c' ? w.WW_CHARACTERS : w.WW_WEAPONS.filter(function (x) { return x.r >= 3; });
     if (filterFn) list = list.filter(filterFn);
     var id = 'pk' + Date.now();
     lightbox(
-      '<h3 style="margin:0 0 4px">選擇' + (kind === 'c' ? '角色' : '武器') + '</h3>' +
-      '<div class="dim2" style="margin-bottom:10px">點頭像即可加入，可連續點選多個</div>' +
+      '<h3 style="margin:0 0 4px">' + esc(opts.title || ('選擇' + (kind === 'c' ? '角色' : '武器'))) + '</h3>' +
+      '<div class="dim2" style="margin-bottom:10px">' +
+      esc(opts.hint || '點頭像即可加入，可連續點選多個') + '</div>' +
       '<input class="search" id="' + id + 'q" placeholder="輸入名稱搜尋…" style="width:100%;margin-bottom:12px">' +
       '<div class="grid ' + (kind === 'c' ? 'chars' : 'weps') + ' mini pickgrid" id="' + id + '"></div>');
     var grid = byId(id), inp = byId(id + 'q');
@@ -690,6 +692,7 @@
       }).join('') || '<div class="empty">沒有符合的項目</div>';
       grid.querySelectorAll('.pickitem').forEach(function (el) {
         el.onclick = function () {
+          if (opts.once) { closeLB(); onPick(el.dataset.k); return; }
           onPick(el.dataset.k);
           el.classList.add('picked');
         };
@@ -837,9 +840,23 @@
     var R = Store.get(K_ROSTER, {});
     var state = { show: '全部', el: null, r: null, q: '' };
     function save() { Store.set(K_ROSTER, R); }
-    function rec(id) { return R[id] || (R[id] = { own: 0, lv: 0, m: 0, wep: '', wlv: 0, done: {} }); }
+    function rec(id) { return R[id] || (R[id] = { own: 0, lv: 0, m: 0, wep: '', wlv: 0, wr: 1, sk: {}, done: {} }); }
 
     /* 畢業檢查：回傳未達成項目 */
+    /* 可升級的五個技能（延奏與固有技能不獨立升級） */
+    var SK_KEYS = [
+      { k: '常態攻擊', slug: 'basic' }, { k: '共鳴技能', slug: 'skill' },
+      { k: '共鳴迴路', slug: 'forte' }, { k: '共鳴解放', slug: 'ult' },
+      { k: '變奏技能', slug: 'intro' }
+    ];
+    var SK_MAX = 10;
+    function skLv(r, slug) {
+      if (r.sk && r.sk[slug] != null) return r.sk[slug];
+      return (r.done || {}).skill ? SK_MAX : 1;     /* 相容舊資料的「技能已升滿」勾選 */
+    }
+    function skDone(r) { return SK_KEYS.every(function (s) { return skLv(r, s.slug) >= SK_MAX; }); }
+    function skMin(r) { return Math.min.apply(null, SK_KEYS.map(function (s) { return skLv(r, s.slug); })); }
+
     function gaps(c) {
       var r = R[c.id] || {}, g = [];
       if ((r.lv || 0) < 90) g.push({ s: '角色90', f: '角色 ' + lvLabel(r.lv || 0) + ' → 90' });
@@ -847,7 +864,7 @@
       else if ((r.wlv || 0) < 90) g.push({ s: '武器90', f: '武器 ' + lvLabel(r.wlv || 0) + ' → 90' });
       if (!(r.done || {}).set) g.push({ s: '聲骸套裝', f: '聲骸套裝未配好' });
       if (!(r.done || {}).echo) g.push({ s: '主聲骸', f: '主聲骸未到位' });
-      if (!(r.done || {}).skill) g.push({ s: '技能滿級', f: '技能未升滿' });
+      if (!skDone(r)) g.push({ s: '技能' + skMin(r) + '/' + SK_MAX, f: '技能最低只有 ' + skMin(r) + ' 級（目標 ' + SK_MAX + '）' });
       return g;
     }
     var TOTAL_CHECKS = 5;
@@ -861,34 +878,112 @@
     /* 「顯示」預設全部：把 state.show 初始化為 null 代表全部 */
     state.show = null;
 
+    /* 把目前表單上的值寫回紀錄（切換到武器挑選器時不會遺失） */
+    function readForm(r) {
+      if (!byId('e_own')) return;
+      r.own = byId('e_own').checked ? 1 : 0;
+      r.lv = +byId('e_lv').value;
+      r.m = +byId('e_m').value;
+      r.wlv = +byId('e_wlv').value;
+      if (byId('e_wr')) r.wr = +byId('e_wr').value;
+      r.sk = r.sk || {};
+      SK_KEYS.forEach(function (s) { var el = byId('e_sk_' + s.slug); if (el) r.sk[s.slug] = +el.value; });
+      r.done = { set: byId('e_set').checked ? 1 : 0, echo: byId('e_echo').checked ? 1 : 0 };
+    }
+
     function editor(c) {
       var r = rec(c.id);
-      var weps = w.WW_WEAPONS.filter(function (x) { return x.t === c.wp && x.r >= 3; })
-        .sort(function (a, b) { return b.r - a.r || a.n.localeCompare(b.n, 'zh-Hant'); });
+      var wep = r.wep ? w.WW_WEAPONS.find(function (x) { return x.n === r.wep; }) : null;
+      var recEcho = c.build && c.build.echo
+        ? byName.echo(String(c.build.echo).split(/[（(]/)[0].trim()) : null;
+
+      var panelRows = Object.keys(c.panel || {}).map(function (k) {
+        return '<tr><td>' + esc(k) + '</td><td>' + esc(c.panel[k]) + '</td></tr>';
+      }).join('') || '<tr><td colspan="2" class="dimtxt">此角色尚無畢業面板參考</td></tr>';
+
       lightbox(
         '<div class="lb-head">' + thumb(c.icon, c.name, 'sm') +
-        '<div><h3>' + esc(c.name) + '</h3><div class="dim2">' + esc(c.el) + '　' + c.r + '★　' + esc(c.wp) + '</div></div></div>' +
+        '<div><h3>' + esc(c.name) + '</h3><div class="dim2">' +
+        esc(c.el) + '　' + c.r + '★　' + esc(c.wp) + '　' + esc((c.role || []).join('／')) + '</div></div></div>' +
+
         '<table class="kv">' +
         '<tr><td>擁有</td><td><label class="sw"><input type="checkbox" id="e_own"' + (r.own ? ' checked' : '') + '><span>我有這位角色</span></label></td></tr>' +
-        '<tr><td>角色等級</td><td><select id="e_lv">' + LV_OPTS.map(function (v) { return '<option value="' + v + '"' + (v === (r.lv || 0) ? ' selected' : '') + '>' + lvLabel(v) + '</option>'; }).join('') + '</select></td></tr>' +
-        '<tr><td>共鳴鏈</td><td><select id="e_m">' + [0, 1, 2, 3, 4, 5, 6].map(function (v) { return '<option value="' + v + '"' + (v === (r.m || 0) ? ' selected' : '') + '>M' + v + '</option>'; }).join('') + '</select></td></tr>' +
-        '<tr><td>武器</td><td><select id="e_wep"><option value="">（未設定）</option>' +
-        weps.map(function (x) { return '<option value="' + esc(x.n) + '"' + (x.n === r.wep ? ' selected' : '') + '>' + x.r + '★ ' + esc(x.n) + '</option>'; }).join('') + '</select></td></tr>' +
-        '<tr><td>武器等級</td><td><select id="e_wlv">' + LV_OPTS.map(function (v) { return '<option value="' + v + '"' + (v === (r.wlv || 0) ? ' selected' : '') + '>' + lvLabel(v) + '</option>'; }).join('') + '</select></td></tr>' +
-        '<tr><td>畢業項目</td><td>' +
-        '<label class="sw"><input type="checkbox" id="e_set"' + ((r.done || {}).set ? ' checked' : '') + '><span>聲骸套裝已配好（' + esc((c.build && c.build.set) || '—') + '）</span></label>' +
-        '<label class="sw"><input type="checkbox" id="e_echo"' + ((r.done || {}).echo ? ' checked' : '') + '><span>主聲骸已到位（' + esc((c.build && c.build.echo) || '—') + '）</span></label>' +
-        '<label class="sw"><input type="checkbox" id="e_skill"' + ((r.done || {}).skill ? ' checked' : '') + '><span>技能已升滿</span></label>' +
-        '</td></tr></table>' +
+        '<tr><td>角色等級</td><td><select id="e_lv">' +
+        LV_OPTS.map(function (v) { return '<option value="' + v + '"' + (v === (r.lv || 0) ? ' selected' : '') + '>' + lvLabel(v) + '</option>'; }).join('') +
+        '</select></td></tr>' +
+        '<tr><td>共鳴鏈</td><td><select id="e_m">' +
+        [0, 1, 2, 3, 4, 5, 6].map(function (v) { return '<option value="' + v + '"' + (v === (r.m || 0) ? ' selected' : '') + '>M' + v + '</option>'; }).join('') +
+        '</select></td></tr>' +
+        '<tr><td>武器</td><td><div class="wsel">' +
+        '<button class="wepbtn' + (wep ? ' r' + wep.r : '') + '" id="e_wepbtn">' +
+        (wep ? '<img src="' + esc(wep.ic) + '" alt="" onerror="this.remove()"><span><b>' + esc(wep.n) + '</b><i>' + stars(wep.r) + '　' + esc(wep.t) + '</i></span>'
+          : '<span class="pick-empty">＋ 點此挑選武器</span>') + '</button>' +
+        (wep ? '<button class="btn ghost sm" id="e_wepclr">清除</button>' : '') +
+        '</div></td></tr>' +
+        '<tr><td>武器等級</td><td><div class="wsel">' +
+        '<select id="e_wlv"' + (wep ? '' : ' disabled') + '>' +
+        LV_OPTS.map(function (v) { return '<option value="' + v + '"' + (v === (r.wlv || 0) ? ' selected' : '') + '>' + lvLabel(v) + '</option>'; }).join('') +
+        '</select>' +
+        '<label class="inlab">精煉 <select id="e_wr"' + (wep ? '' : ' disabled') + '>' +
+        [1, 2, 3, 4, 5].map(function (v) { return '<option value="' + v + '"' + (v === (r.wr || 1) ? ' selected' : '') + '>' + v + '</option>'; }).join('') +
+        '</select></label></div></td></tr>' +
+
+        '<tr><td>技能等級</td><td><div class="sklv">' +
+        SK_KEYS.map(function (s) {
+          var sk = (c.skills || []).find(function (x) { return x.k === s.k; }) || {};
+          var v = skLv(r, s.slug);
+          return '<label class="sklv-row"><span class="sklv-n">' + icon(sk.ic, s.k) +
+            '<i>' + esc(s.k) + '</i></span>' +
+            '<select id="e_sk_' + s.slug + '">' +
+            Array.from({ length: SK_MAX }, function (_, i) { return i + 1; })
+              .map(function (n) { return '<option value="' + n + '"' + (n === v ? ' selected' : '') + '>' + n + '</option>'; }).join('') +
+            '</select></label>';
+        }).join('') +
+        '</div><div class="planbtns" style="margin-top:8px">' +
+        '<button class="btn ghost sm" id="e_skmax">全部設為 ' + SK_MAX + '</button>' +
+        '<button class="btn ghost sm" id="e_skmin">全部設為 1</button></div></td></tr>' +
+
+        '<tr><td>聲骸</td><td>' +
+        '<label class="sw"><input type="checkbox" id="e_set"' + ((r.done || {}).set ? ' checked' : '') + '><span>套裝已配好</span></label>' +
+        '<div class="dimtxt" style="margin:2px 0 8px 24px">' + linkify(c.build && c.build.set, ['sonata']) + '</div>' +
+        '<label class="sw"><input type="checkbox" id="e_echo"' + ((r.done || {}).echo ? ' checked' : '') + '><span>主聲骸已到位</span></label>' +
+        '<div class="dimtxt" style="margin:2px 0 0 24px">' +
+        (recEcho ? '<a class="ref" data-lb="echo" data-n="' + esc(recEcho.cn) + '" href="#">' +
+          icon(recEcho.ic, recEcho.cn) + esc(recEcho.cn) + '</a>' : esc((c.build && c.build.echo) || '—')) +
+        '</div></td></tr>' +
+        '</table>' +
+
         '<div class="planbtns"><button class="btn" id="e_save">儲存</button>' +
-        '<a class="btn ghost" href="character.html?id=' + c.id + '">看角色內頁</a></div>');
-      byId('e_save').onclick = function () {
-        r.own = byId('e_own').checked ? 1 : 0;
-        r.lv = +byId('e_lv').value; r.m = +byId('e_m').value;
-        r.wep = byId('e_wep').value; r.wlv = +byId('e_wlv').value;
-        r.done = { set: byId('e_set').checked ? 1 : 0, echo: byId('e_echo').checked ? 1 : 0, skill: byId('e_skill').checked ? 1 : 0 };
-        save(); closeLB(); render();
+        '<a class="btn ghost" href="character.html?id=' + c.id + '">看完整角色內頁</a></div>' +
+
+        '<h4 class="lb-h4">推薦畢業面板</h4>' +
+        '<table class="kv">' + panelRows + '</table>' +
+        '<div class="dimtxt" style="margin-top:6px">為含隊伍增益前的自身面板參考區間，實際需求依隊伍與武器而異。</div>' +
+        '<h4 class="lb-h4">有效詞條優先序</h4>' +
+        '<div class="pill-row">' + (c.sub || []).map(function (s, i) {
+          return '<span class="pill' + (i === 0 ? ' no1' : '') + '">' + (i + 1) + '. ' + esc(s) + '</span>';
+        }).join('') + '</div>' +
+        '<h4 class="lb-h4">配裝重點</h4>' +
+        '<table class="kv">' +
+        '<tr><td>主詞條</td><td>' + esc((c.build && c.build.main) || '—') + '</td></tr>' +
+        '<tr><td>推薦武器</td><td>' + linkify(c.build && c.build.weapon, ['weapon']) + '</td></tr>' +
+        '</table>');
+
+      byId('e_wepbtn').onclick = function () {
+        readForm(r);
+        picker('w', function (n) {
+          r.wep = n;
+          if (!r.wlv) r.wlv = 0;
+          if (!r.wr) r.wr = 1;
+          save(); editor(c);
+        }, function (x) { return x.t === c.wp; },
+          { once: 1, title: '選擇武器（' + c.wp + '）', hint: '只列出 ' + c.name + ' 能使用的' + c.wp + '，點一下就選定' });
       };
+      var clr = byId('e_wepclr');
+      if (clr) clr.onclick = function () { readForm(r); r.wep = ''; r.wlv = 0; r.wr = 1; save(); editor(c); };
+      byId('e_skmax').onclick = function () { SK_KEYS.forEach(function (s) { byId('e_sk_' + s.slug).value = SK_MAX; }); };
+      byId('e_skmin').onclick = function () { SK_KEYS.forEach(function (s) { byId('e_sk_' + s.slug).value = 1; }); };
+      byId('e_save').onclick = function () { readForm(r); save(); closeLB(); render(); };
     }
 
     function render() {
@@ -917,8 +1012,12 @@
         var pct = r.own ? Math.round((TOTAL_CHECKS - g.length) / TOTAL_CHECKS * 100) : 0;
         return '<div class="card r' + c.r + ' rcard' + (r.own ? '' : ' unowned') + '" data-id="' + c.id + '">' +
           thumb(c.icon, c.name) +
-          '<span class="badge-el" style="background:' + EL_COLOR[c.el] + '"><img src="' + esc(c.elIc) + '" alt="" onerror="this.remove()"></span>' +
-          (r.own ? '<span class="badge-lv">' + (r.lv ? 'Lv' + r.lv : '未養成') + (r.m ? '　M' + r.m : '') + '</span>' : '<span class="badge-lv off">未擁有</span>') +
+          '<span class="badge-el" style="border-color:' + EL_COLOR[c.el] + ';color:' + EL_COLOR[c.el] + '"><img src="' + esc(c.elIc) + '" alt="" onerror="this.remove()"></span>' +
+          (r.own ? '<span class="badge-lv">' + (r.lv ? 'Lv' + r.lv : '未養成') + '</span>' : '<span class="badge-lv off">未擁有</span>') +
+          (r.own && (r.m || r.wep)
+            ? '<span class="badge-mr" title="共鳴鏈 M' + (r.m || 0) +
+            (r.wep ? '　·　' + esc(r.wep) + ' 精煉 ' + (r.wr || 1) : '　·　尚未設定武器') + '">' +
+            'M' + (r.m || 0) + (r.wep ? '<em>+</em>R' + (r.wr || 1) : '') + '</span>' : '') +
           (r.own && !g.length ? '<span class="badge-grad">畢業</span>' : '') +
           '<div class="cbody"><div class="cname">' + esc(c.name) + '</div>' +
           (r.own ? '<div class="prog" title="畢業進度 ' + (TOTAL_CHECKS - g.length) + '/' + TOTAL_CHECKS + '"><i style="width:' + pct + '%"></i></div>' +
