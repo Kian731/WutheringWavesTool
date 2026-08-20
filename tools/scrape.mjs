@@ -6,12 +6,16 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
 
 async function jget(params) {
   const u = API + '?' + new URLSearchParams({ format: 'json', ...params });
-  for (let i = 0; i < 4; i++) {
+  for (let i = 0; i < 7; i++) {
     try {
       const r = await fetch(u, { headers: UA });
-      if (r.ok) return await r.json();
-    } catch (e) { }
-    await sleep(800 * (i + 1));
+      const t = await r.text();
+      if (t.startsWith('{')) return JSON.parse(t);
+      // 回傳的是防爬蟲頁 → 等久一點再試
+      process.stdout.write('~');
+      await sleep(6000 * (i + 1));
+      continue;
+    } catch (e) { await sleep(3000 * (i + 1)); }
   }
   throw new Error('fetch failed: ' + u);
 }
@@ -45,7 +49,7 @@ async function fetchPages(titles) {
       };
     }
     process.stdout.write('.');
-    await sleep(150);
+    await sleep(500);
   }
   process.stdout.write('\n');
   return res;

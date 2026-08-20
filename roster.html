@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>我的角色｜鳴潮攻略站</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;600;800;900&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/css/style.css">
+</head>
+<body data-page="roster">
+
+<header class="site"><div class="hwrap">
+  <a class="brand" href="index.html"><span class="dot"></span>
+    <span>鳴潮攻略站<small>WUTHERING WAVES</small></span></a>
+  <nav class="main">
+    <a href="index.html" data-nav="home">首頁</a>
+    <a href="characters.html" data-nav="characters">全角色圖鑒</a>
+    <a href="weapons.html" data-nav="weapons">武器圖鑒</a>
+    <a href="echoes.html" data-nav="echoes">聲骸套裝</a>
+    <a href="roster.html" data-nav="roster">我的角色</a>
+    <a href="plan.html" data-nav="plan">養成計劃</a>
+  </nav>
+</div></header>
+
+<div class="wrap">
+  <h1 class="page-title">我的角色</h1>
+  <p class="page-sub">點任一頭像即可設定是否擁有、等級、共鳴鏈、武器與畢業項目。畢業條件共 5 項：角色 90 級、武器 90 級、聲骸套裝配好、主聲骸到位、技能升滿；卡片上會顯示進度與目前最缺的一項。資料存在這台裝置的瀏覽器裡。</p>
+
+  <div class="stat-row" id="summary" style="margin-bottom:18px"></div>
+  <div class="filters" id="rfilters"></div>
+  <div style="display:flex;margin-bottom:12px"><span class="count" id="count"></span></div>
+  <div class="grid chars" id="grid"></div>
+</div>
+
+<footer class="site">練度資料只存在本機瀏覽器（localStorage），清除瀏覽資料會一併消失　·　版本基準 3.5</footer>
+
+<script src="data/characters.js"></script>
+<script src="data/weapons.js"></script>
+<script src="data/sonatas.js"></script>
+<script src="data/echoes.js"></script>
+<script src="data/ascension.js"></script>
+<script src="assets/js/app.js"></script>
+</body>
+</html>

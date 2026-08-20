@@ -19,12 +19,14 @@ node .claude/serve.js
 | 檔案 | 內容 |
 |---|---|
 | `index.html` | 首頁、資料量統計、最新實裝角色 |
-| `characters.html` | 全角色圖鑒（**頭像**）：屬性／武器／星級／定位／性別 五種篩選（含屬性與武器圖示）＋關鍵字搜尋＋9 種排序 |
-| `character.html?id=<id>` | 角色內頁：**立繪**、戰鬥特色、隊伍增益、畢業面板、有效詞條、**突破素材（含素材圖示）**、配裝推薦（**指定聲骸頭像**＋套裝可點）、**全部技能（含技能圖示）**、**共鳴鏈 M1–M6（含命座圖示）** |
-| `weapons.html` | 武器圖鑒：類型／星級篩選＋搜尋＋5 種排序 |
+| `characters.html` | 全角色圖鑒（**頭像**）：屬性／武器／星級／定位／**增益能力**／**傷害來源**／性別 七種篩選（含屬性與武器圖示）＋關鍵字搜尋＋9 種排序 |
+| `character.html?id=<id>` | 角色內頁，分 **4 個頁簽**：①基本資料・畢業門檻 ②配裝・突破素材 ③技能 ④共鳴鏈。立繪、戰鬥特色、增益標籤、輸出來源、素材圖示、技能／命座圖示；長敘述超過 3 行自動收合可展開；武器與聲骸點了開 lightbox 不離開頁面 |
+| `weapons.html` | 武器圖鑒：類型／星級／**功能效果**（隊伍增益・自身增益・攻擊・暴擊・治療…）篩選＋搜尋＋5 種排序，卡片標示增益範圍 |
 | `weapon.html?n=<名稱>` | 武器內頁：**完整武器圖**、90 級攻擊與副詞條、武器技能全文（精煉 1–5）、取得途徑、適配角色、武器故事 |
-| `echoes.html` | 聲骸套裝一覽（圖示＋標題＋聲骸數） |
-| `sonata.html?id=<id>` | 套裝內頁：2／5 件效果、推薦角色、可調諧的所有聲骸（依 COST 分組，滑鼠停留看技能） |
+| `echoes.html` | 聲骸套裝一覽（圖示＋標題）：**屬性／件數／2 件效果／增益效果** 四種篩選 |
+| `roster.html` | **我的角色**：勾選擁有、設定等級／共鳴鏈／武器／畢業項目，卡片顯示畢業進度與最缺的一項；可篩選「未畢業」。資料存在瀏覽器 localStorage |
+| `plan.html` | **養成計劃**：加入多位角色與武器、設定目前→目標等級，合併統計突破素材；填入持有量算出還缺多少，並提示哪些可用下階 3 換 1 合成補足；可從「我的角色」一鍵帶入未滿等項目 |
+| `sonata.html?id=<id>` | 套裝內頁：2／5 件效果、推薦角色、可調諧的所有聲骸（依 COST 分組）；**點任一聲骸開 lightbox 看它裝在第一欄位（主聲骸）時的效果** |
 
 ## 資料
 
@@ -34,6 +36,7 @@ node .claude/serve.js
 | `data/weapons.js` | 120 | 星級、類型、副詞條、90 級與初始攻擊、武器技能全文、取得途徑、武器故事、適配角色 |
 | `data/echoes.js` | 138 | 中文名、英文對照、COST、危險度、編號、所屬套裝、聲骸技能、冷卻 |
 | `data/sonatas.js` | 34 | 套裝中英文名、2／5 件效果、推薦角色 |
+| `data/ascension.js` | — | 養成計劃用：56 角色與 120 武器的**分階突破素材**、133 種素材的圖示與合成家族（17 條 3 換 1 合成線） |
 | `data/backup/` | — | 人工整理欄位的來源（配裝／畢業面板／詞條／定位／增益／評級），重建時會自動併入 |
 
 ### 資料來源
@@ -46,7 +49,7 @@ node .claude/serve.js
 
 ## 圖片
 
-`assets/img/` 共 **1,168 張、約 110 MB**，全部本機檔案，沒有任何外連：
+`assets/img/` 共 **1,291 張、約 110 MB**，全部本機檔案，沒有任何外連：
 
 | 目錄 | 內容 |
 |---|---|
@@ -73,7 +76,7 @@ cd tools && npm install
 依序執行：
 
 ```bash
-node scrape.mjs && node pageimgs2.mjs && node build.mjs && node fetch-images.mjs && node kuro-fill.mjs
+node scrape.mjs && node pageimgs2.mjs && node build.mjs && node fetch-images.mjs && node kuro-fill.mjs && node classify.mjs && node plan-data.mjs
 ```
 
 - `scrape.mjs`　抓 BWIKI 的角色／武器／聲骸原始 wikitext → `raw.json`
@@ -82,6 +85,8 @@ node scrape.mjs && node pageimgs2.mjs && node build.mjs && node fetch-images.mjs
 - `supp.mjs`　（選用）從 wuthering.gg 補 BWIKI 缺少的圖 → `supp.json`
 - `fetch-images.mjs`　下載所有圖片到 `../assets/img/`（已存在的會略過）
 - `kuro-fill.mjs`　用庫街區官方 API 補齊 BWIKI 缺的技能與突破素材
+- `plan-data.mjs`　產生分階突破素材 → `../data/ascension.js`（角色取自庫街區、武器取自 BWIKI，並以總量表對帳校正）
+- `classify.mjs`　由技能／命座／武器技能／套裝效果的文字推導可篩選的分類標籤（角色增益能力與傷害來源、武器功能效果、套裝件數與增益分類），**每次跑完 build 之後都要再跑這支**
 
 `tools/` 只是產生資料用，網站本身不需要它，可以整個刪掉。
 

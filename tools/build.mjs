@@ -118,9 +118,16 @@ for (const [cn, c] of Object.entries(raw.chars)) {
       ic: img(page, [`${cn}共鸣链${i}.png`, `角色 ${cn} 共鸣链${i}.png`], `assets/img/chain/${id}_${i}.png`)
     });
   }
+  /* 敵人掉落素材的總量在遊戲裡固定是 低4／中12／高12／全4，
+     BWIKI 偶有手誤（例：忌炎高頻寫成 4），這裡以通則校正並記錄。 */
+  const CORE_Q = [[/^(低频|简陋)/, '4'], [/^(中频|基准)/, '12'], [/^(高频|改造)/, '12'], [/^(全频|特制)/, '4']];
   const asc = (st['突破消耗材料总数'] || '').split(',').filter(Boolean).map(s => {
-    const [n, q] = s.split('*');
-    return { n: T(n.trim()), q: (q || '').trim(), ic: itemIcon(n.trim(), page) };
+    const [n0, q0] = s.split('*');
+    const n = n0.trim();
+    let q = (q0 || '').trim();
+    const rule = CORE_Q.find(([re]) => re.test(n));
+    if (rule && q !== rule[1]) { console.log('  素材總量校正：', cn, T(n), q, '→', rule[1]); q = rule[1]; }
+    return { n: T(n), q, ic: itemIcon(n, page) };
   });
 
   let icon = img(page, [`角色 ${cn} 头像.png`], `assets/img/char/${id}.png`);

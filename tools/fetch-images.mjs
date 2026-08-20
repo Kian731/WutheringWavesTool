@@ -1,5 +1,5 @@
 import fs from 'fs';
-import path from 'path';import path from 'path';
+import path from 'path';
 const SITE = path.resolve('..');
 const list=JSON.parse(fs.readFileSync('images.json','utf8'));
 const UA={'user-agent':'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/126'};
