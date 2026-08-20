@@ -1,0 +1,6 @@
+{
+  "name": "wuwa-guide-tools",
+  "private": true,
+  "type": "module",
+  "dependencies": { "opencc-js": "^1.4.1" }
+}
