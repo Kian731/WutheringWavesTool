@@ -4,6 +4,7 @@
  *  另外輸出素材登錄表（圖示、合成家族與階級）
  */
 import fs from 'fs';
+import { idMapFor, newlyAdded } from './ids.mjs';
 import path from 'path';
 import * as OpenCC from 'opencc-js';
 
@@ -32,21 +33,9 @@ const post = async (url, body) => {
 };
 
 /* 簡體角色名 → 站內 id（與 build.mjs 相同） */
-const ID = {
-  '白芷': 'baizhi', '炽霞': 'chixia', '鉴心': 'jianxin', '安可': 'encore', '丹瑾': 'danjin',
-  '忌炎': 'jiyan', '卡卡罗': 'calcharo', '今汐': 'jinhsi', '灯灯': 'lumi', '椿': 'camellya',
-  '菲比': 'phoebe', '布兰特': 'brant', '弗洛洛': 'phrolova', '奥古斯塔': 'augusta',
-  '嘉贝莉娜': 'galbrena', '仇远': 'qiuyuan', '卜灵': 'buling', '绯雪': 'hiyuki',
-  '爱弥斯': 'aemeath', '达妮娅': 'denia', '漂泊者·衍射': 'rover-spectro', '散华': 'sanhua',
-  '秋水': 'aalto', '漂泊者·湮灭': 'rover-havoc', '莫特斐': 'mortefi', '凌阳': 'lingyang',
-  '珂莱塔': 'carlotta', '洛可可': 'roccia', '坎特蕾拉': 'cantarella', '漂泊者·气动': 'rover-aero',
-  '露帕': 'lupa', '卡提希娅': 'cartethyia', '千咲': 'chisa', '露西': 'lucy', '琳奈': 'lynae',
-  '莫宁': 'mornye', '陆·赫斯': 'luuk-herssen', '丽贝卡': 'rebecca', '洛瑟菈': 'lucilla',
-  '漂泊者·导电': 'rover-electro', '秧秧': 'yangyang', '桃祈': 'taoqi', '维里奈': 'verina',
-  '渊武': 'yuanwu', '吟霖': 'yinlin', '长离': 'changli', '相里要': 'xiangli-yao',
-  '折枝': 'zhezhi', '守岸人': 'shorekeeper', '釉瑚': 'youhu', '赞妮': 'zani', '夏空': 'ciaccona',
-  '尤诺': 'iuno', '西格莉卡': 'sigrika', '秧秧·玄翎': 'yangyang-xuanling', '穗穗': 'suisui'
-};
+/* ID 表改由 ids.mjs 依 wiki 現有角色自動產生（新角色會自動取得代號） */
+const raw = JSON.parse(fs.readFileSync('raw.json', 'utf8'));
+const ID = idMapFor(Object.keys(raw.chars).filter(n => !/預設|预设|:/.test(n)));
 /* 站內名 → 庫街區名（漂泊者要指定性別，材料兩性相同） */
 const toKuro = n => n.replace(/^漂泊者·(.+)$/, '漂泊者-女-$1');
 
@@ -59,7 +48,6 @@ function qty(s) {
 }
 
 /* ---------- 素材登錄表 ---------- */
-const raw = JSON.parse(fs.readFileSync('raw.json', 'utf8'));
 const FILEMAP = JSON.parse(fs.readFileSync('filemap.json', 'utf8'));
 const load = f => { const g = {}; new Function('window', fs.readFileSync(path.join(SITE, f), 'utf8'))(g); return g; };
 const chars = load('data/characters.js').WW_CHARACTERS;
@@ -125,6 +113,87 @@ for (const [simp, id] of Object.entries(ID)) {
   await sleep(450);
 }
 console.log('\n完成', done, failed.length ? '｜失敗：' + failed.join('、') : '');
+
+/* ---------- 技能升級素材 ----------
+ * 主來源：BWIKI 的「基础技能升级消耗」（9 段，對應 LV.2→LV.10）＋固有技能／屬性加成的激活消耗
+ * 缺的角色（BWIKI 尚未填寫）改用庫街區「技能突破材料」分頁回填
+ */
+const skillCost = {};   // id -> { lv:[{n,q}]x9, branch:[{name, mats:[{n,q}]}] }
+{
+  const parseList = (s, page) => String(s || '').split(',').map(x => x.trim()).filter(Boolean).map(x => {
+    const [n, q] = x.split('*');
+    return { n: reg(n.trim(), null), q: qty(q) };
+  });
+  const BRANCH = [
+    ['固有技能1激活消耗', '固有技能一'], ['固有技能2激活消耗', '固有技能二'],
+    ['属性加成1激活消耗', '屬性加成一'], ['属性加成2激活消耗', '屬性加成二'],
+    ['属性加成3激活消耗', '屬性加成三'], ['属性加成4激活消耗', '屬性加成四']
+  ];
+  let fromWiki = 0, needKuro = [];
+  for (const [cn, c] of Object.entries(raw.chars)) {
+    const id = ID[cn]; if (!id) continue;
+    const sk = c.skills || {};
+    const base = sk['基础技能升级消耗'];
+    if (base && base.trim()) {
+      const lv = base.split(';').map(s => parseList(s, '共鸣者/' + cn)).filter(a => a.length);
+      if (lv.length >= 9) {
+        skillCost[id] = {
+          lv: lv.slice(0, 9),
+          branch: BRANCH.map(([k, label]) => ({ name: label, mats: parseList(sk[k], '共鸣者/' + cn) }))
+            .filter(b => b.mats.length)
+        };
+        fromWiki++;
+        continue;
+      }
+    }
+    needKuro.push([cn, id]);
+  }
+  console.log('技能素材：BWIKI', fromWiki, '｜待庫街區回填', needKuro.length, needKuro.map(x => x[0]).join('、'));
+
+  /* 庫街區回填 */
+  for (const [cn, id] of needKuro) {
+    const kname = toKuro(cn);
+    const rec = recs.find(r => r.name === kname);
+    if (!rec || !rec.content || !rec.content.linkId) { console.log('  跳過', cn); continue; }
+    const d = await post('https://api.kurobbs.com/wiki/core/catalogue/item/getEntryDetail', { id: rec.content.linkId });
+    let comp = null;
+    if (d && d.data) for (const m of d.data.content.modules) for (const x of (m.components || [])) if (x.title === '技能突破材料') comp = x;
+    if (!comp || !comp.tabs || !comp.tabs.length) { console.log('  無技能素材表', cn); continue; }
+    /* 這些頁面的素材名不一定包在 <a> 裡，改成先轉純文字再抓「名稱 xN」 */
+    const toText = h => ent(String(h || '').replace(/<[^>]+>/g, ' ')).replace(/\s+/g, ' ');
+    const pairs = t => [...t.matchAll(/([一-鿿·「」]{2,12})\s*x\s*([\d,]+)/g)]
+      .map(m => ({ n: reg(m[1].trim(), null), q: qty(m[2]) }));
+
+    const t0 = toText(comp.tabs[0].content);
+    const at = t0.lastIndexOf('LV.10');
+    if (at < 0) { console.log('  找不到等級表', cn); continue; }
+    const flat = pairs(t0.slice(at + 5));
+    const lv = []; let cur = [];
+    for (const it of flat) { cur.push(it); if (/貝幣/.test(it.n)) { lv.push(cur); cur = []; } }
+
+    /* 分支節點：各分頁「分支強化材料消耗」段落，以三階／五階突破為界，去重 */
+    const seenSig = new Set(), branch = [];
+    for (const tb of comp.tabs) {
+      const tt = toText(tb.content);
+      const seg = tt.slice(0, tt.indexOf('等级') >= 0 ? tt.indexOf('等级') : 0);
+      const parts = seg.split(/(三阶突破|五阶突破)/).slice(1);
+      for (let i = 0; i + 1 < parts.length; i += 2) {
+        const mats = pairs(parts[i + 1]);
+        if (!mats.length) continue;
+        const sig = mats.map(x => x.n + x.q).join('|');
+        if (seenSig.has(sig)) continue;
+        seenSig.add(sig);
+        branch.push({ name: '分支強化（' + parts[i].replace('阶突破', '階解鎖') + '）', mats });
+      }
+    }
+    if (lv.length >= 9) {
+      skillCost[id] = { lv: lv.slice(0, 9), branch: branch };
+      console.log('  ✓ 庫街區回填', cn, '（等級 9 段、分支 ' + branch.length + ' 個）');
+    } else console.log('  解析不足（' + lv.length + ' 段）', cn);
+    await sleep(500);
+  }
+  console.log('技能素材完成', Object.keys(skillCost).length, '/', Object.keys(ID).length);
+}
 
 /* ---------- 武器：BWIKI 分階資料 ---------- */
 const KEYS = ['20级突破材料', '40级突破材料', '50级突破材料', '60级突破材料', '70级突破材料', '80级突破材料'];
@@ -248,7 +317,7 @@ const out =
  * levels 為突破門檻等級；tiers[i] 對應「等級 levels[i] → 下一段上限」所需素材
  * 產生日期：${new Date().toISOString().slice(0, 10)}
  */
-window.WW_ASC = ${JSON.stringify({ levels: [20, 40, 50, 60, 70, 80], caps: [20, 40, 50, 60, 70, 80, 90], chars: ascChar, weapons: ascWeapon, mats: clean })};
+window.WW_ASC = ${JSON.stringify({ levels: [20, 40, 50, 60, 70, 80], caps: [20, 40, 50, 60, 70, 80, 90], chars: ascChar, weapons: ascWeapon, skills: skillCost, mats: clean })};
 `;
 fs.writeFileSync(path.join(SITE, 'data/ascension.js'), out);
 

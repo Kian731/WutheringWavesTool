@@ -141,9 +141,61 @@ function classifySonata(s) {
   return s;
 }
 
+/* ============ 新角色的人工欄位自動補值 ============
+ * 新角色還沒有人工整理的定位／增益摘要／畢業面板／詞條，
+ * 這裡依技能文字與分類標籤自動給一組合理預設，並標記 auto，頁面上會註明。
+ */
+const PANEL_BY_ROLE = {
+  '主C': { '攻擊': '≥ 2,300', '暴擊率': '≥ 70%', '暴擊傷害': '≥ 240%', '屬性傷害加成': '≥ 60%' },
+  '副C': { '攻擊': '≥ 2,100', '暴擊率': '≥ 65%', '暴擊傷害': '≥ 210%', '共鳴效率': '≥ 120%' },
+  '增傷輔助': { '攻擊': '≥ 2,000', '共鳴效率': '≥ 130%', '暴擊率': '≥ 60%' },
+  '治療輔助': { '生命': '≥ 14,000', '共鳴效率': '≥ 150%', '治療效果': '≥ 55%' },
+  '護盾輔助': { '防禦': '≥ 2,000', '共鳴效率': '≥ 130%', '生命': '≥ 13,000' }
+};
+const SUB_BY_ROLE = {
+  '主C': ['暴擊率', '暴擊傷害', '攻擊%', '對應技能傷害加成'],
+  '副C': ['暴擊率', '暴擊傷害', '攻擊%', '共鳴效率'],
+  '增傷輔助': ['共鳴效率', '攻擊%', '暴擊率'],
+  '治療輔助': ['共鳴效率', '生命%', '治療效果加成'],
+  '護盾輔助': ['共鳴效率', '防禦%', '生命%']
+};
+function autofill(c) {
+  const noRole = !c.role || !c.role.length || c.role[0] === '—';
+  const noBuff = !c.buff || c.buff === '—';
+  const noPanel = !c.panel || !Object.keys(c.panel).length;
+  const noSub = !c.sub || !c.sub.length;
+  if (!noRole && !noBuff && !noPanel && !noSub) return false;
+
+  const b = c.buffTags || [], d = c.dmgTags || [];
+  let role;
+  if (b.includes('治療')) role = '治療輔助';
+  else if (b.includes('護盾') && d.includes('輔助向')) role = '護盾輔助';
+  else if (d.includes('輔助向')) role = '增傷輔助';
+  else if (b.includes('全隊增傷') || b.includes('技能增傷')) role = '副C';
+  else role = '主C';
+
+  if (noRole) c.role = [role];
+  if (noPanel) {
+    const p = Object.assign({}, PANEL_BY_ROLE[role]);
+    if (p['屬性傷害加成']) { p[c.el + '傷害加成'] = p['屬性傷害加成']; delete p['屬性傷害加成']; }
+    c.panel = p;
+  }
+  if (noSub) c.sub = (SUB_BY_ROLE[role] || SUB_BY_ROLE['主C']).slice();
+  if (noBuff) {
+    const outro = (c.skills || []).find(s => s.k === '延奏技能');
+    c.buff = outro && outro.desc
+      ? '延奏技能《' + outro.name + '》：' + strip(outro.desc).slice(0, 120)
+      : (b.length && b[0] !== '無隊伍增益' ? '技能可提供：' + b.join('、') : '無明顯隊伍增益');
+  }
+  c.auto = 1;
+  return true;
+}
+
 /* ============ 執行 ============ */
 const cg = load('data/characters.js');
 cg.WW_CHARACTERS.forEach(classifyChar);
+const filled = cg.WW_CHARACTERS.filter(autofill).map(c => c.name);
+if (filled.length) console.log('★ 自動補值的新角色：' + filled.join('、') + '（定位／增益摘要／畢業面板／詞條為系統推估）');
 const wg = load('data/weapons.js');
 wg.WW_WEAPONS.forEach(classifyWeapon);
 const sg = load('data/sonatas.js');

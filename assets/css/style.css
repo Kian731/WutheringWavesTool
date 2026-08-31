@@ -477,3 +477,28 @@ label.sw input{width:16px;height:16px;accent-color:var(--acc);cursor:pointer}
   .badge-mr{bottom:22px;left:3px;right:auto}
   .badge-grad{font-size:9px;padding:1px 5px;top:3px;right:3px}
 }
+
+/* 聲骸等級 / 資料來源標記 */
+.eclv{display:grid;grid-template-columns:repeat(auto-fill,minmax(112px,1fr));gap:6px}
+.eclv-row{display:flex;align-items:center;gap:6px;background:var(--bg3);border:1px solid var(--line);
+  border-radius:9px;padding:5px 7px}
+.eclv-n{display:flex;align-items:center;gap:5px;flex:1;min-width:0}
+.eclv-n b{font-size:11px;color:var(--tx2);font-weight:700}
+.eclv-row select{width:60px;text-align:center}
+i.cost{font-style:normal;font-size:10px;font-weight:800;padding:1px 5px;border-radius:5px;
+  background:var(--bg2);border:1px solid var(--line);color:var(--tx3)}
+i.cost.c4{color:var(--r5);border-color:var(--r5)}
+i.cost.c3{color:var(--acc);border-color:var(--acc)}
+i.cost.c1{color:var(--tx3)}
+label.sw.tiny{display:inline-flex;font-size:11px;margin:0 0 0 4px}
+label.sw.tiny input{width:13px;height:13px}
+.srcbadge{display:inline-flex;align-items:center;gap:4px;padding:1px 8px;border-radius:6px;font-size:11px;
+  font-weight:700;border:1px solid var(--line);background:var(--bg3);color:var(--tx3)}
+.srcbadge.official{border-color:var(--acc);color:var(--acc)}
+@media(max-width:768px){
+  .eclv{grid-template-columns:1fr 1fr}
+  .eclv-row select{width:52px;padding:3px}
+}
+
+.srcbadge.auto{border-color:#ffb27a;color:#ffb27a}
+.badge-role.auto{border-color:#ffb27a;color:#ffb27a}

@@ -1,4 +1,5 @@
 import fs from 'fs';
+import { idMapFor, newlyAdded } from './ids.mjs';
 import path from 'path';
 import * as OpenCC from 'opencc-js';
 
@@ -36,21 +37,8 @@ function itemIcon(cn, page) {
 }
 
 /* ---------- 簡體名 → 站內 id ---------- */
-const ID = {
-  '白芷': 'baizhi', '炽霞': 'chixia', '鉴心': 'jianxin', '安可': 'encore', '丹瑾': 'danjin',
-  '忌炎': 'jiyan', '卡卡罗': 'calcharo', '今汐': 'jinhsi', '灯灯': 'lumi', '椿': 'camellya',
-  '菲比': 'phoebe', '布兰特': 'brant', '弗洛洛': 'phrolova', '奥古斯塔': 'augusta',
-  '嘉贝莉娜': 'galbrena', '仇远': 'qiuyuan', '卜灵': 'buling', '绯雪': 'hiyuki',
-  '爱弥斯': 'aemeath', '达妮娅': 'denia', '漂泊者·衍射': 'rover-spectro', '散华': 'sanhua',
-  '秋水': 'aalto', '漂泊者·湮灭': 'rover-havoc', '莫特斐': 'mortefi', '凌阳': 'lingyang',
-  '珂莱塔': 'carlotta', '洛可可': 'roccia', '坎特蕾拉': 'cantarella', '漂泊者·气动': 'rover-aero',
-  '露帕': 'lupa', '卡提希娅': 'cartethyia', '千咲': 'chisa', '露西': 'lucy', '琳奈': 'lynae',
-  '莫宁': 'mornye', '陆·赫斯': 'luuk-herssen', '丽贝卡': 'rebecca', '洛瑟菈': 'lucilla',
-  '漂泊者·导电': 'rover-electro', '秧秧': 'yangyang', '桃祈': 'taoqi', '维里奈': 'verina',
-  '渊武': 'yuanwu', '吟霖': 'yinlin', '长离': 'changli', '相里要': 'xiangli-yao',
-  '折枝': 'zhezhi', '守岸人': 'shorekeeper', '釉瑚': 'youhu', '赞妮': 'zani', '夏空': 'ciaccona',
-  '尤诺': 'iuno', '西格莉卡': 'sigrika', '秧秧·玄翎': 'yangyang-xuanling', '穗穗': 'suisui'
-};
+/* ID 表改由 ids.mjs 依 wiki 現有角色自動產生（新角色會自動取得代號） */
+const ID = idMapFor(Object.keys(raw.chars).filter(n => !/預設|预设|:/.test(n)));
 
 /* ---------- 讀入備份中我手寫的欄位 ---------- */
 const load = f => { const g = {}; new Function('window', fs.readFileSync(path.join(SITE, f), 'utf8'))(g); return g; };
@@ -206,6 +194,16 @@ for (const wp of weapons) {
   const users = chars.filter(c => c.wp === wp.t && (c.build && c.build.weapon || '').indexOf(wp.n) >= 0);
   wp.own = users.map(c => c.name).join('、');
 }
+
+/* 先把「BWIKI 找不到的圖」記下來，supp.mjs 之後才知道要補哪些
+   （不能等補完再判斷，否則下一輪就以為不缺了） */
+fs.writeFileSync('gaps.json', JSON.stringify({
+  art: chars.filter(c => !c.art).map(c => c.id),
+  chain: chars.filter(c => c.chains.some(x => !x.ic)).map(c => c.id),
+  skill: chars.filter(c => c.skills.some(x => !x.ic)).map(c => c.id),
+  item: chars.filter(c => c.asc.some(a => !a.ic)).map(c => c.id),
+  echo: echoes.filter(e => !e.ic).map(e => e.cn)
+}));
 
 /* ---------- 以 wuthering.gg 備援圖補洞 ---------- */
 if (fs.existsSync('supp.json')) {

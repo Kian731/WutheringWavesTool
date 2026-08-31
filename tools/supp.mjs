@@ -16,7 +16,12 @@ const slug = en => en.toLowerCase().replace(/[():,]/g, '').trim().replace(/\s+/g
 
 const CORE_T = [/低頻|簡陋/, /中頻|基準/, /高頻|改造/, /全頻|特製/];
 
-const need = chars.filter(c => !c.art || c.chains.some(x => !x.ic) || c.skills.some(x => !x.ic) || c.asc.some(a => !a.ic));
+const GAPS = fs.existsSync('gaps.json') ? JSON.parse(fs.readFileSync('gaps.json', 'utf8')) : null;
+const gapIds = GAPS ? new Set([].concat(GAPS.art, GAPS.chain, GAPS.skill, GAPS.item)) : null;
+const need = gapIds
+  ? chars.filter(c => gapIds.has(c.id))
+  : chars.filter(c => !c.art || c.chains.some(x => !x.ic) || c.skills.some(x => !x.ic) || c.asc.some(a => !a.ic));
+const lacks = (c, kind) => GAPS ? GAPS[kind].includes(c.id) : true;
 console.log('需補圖角色', need.length);
 
 for (const c of need) {
@@ -29,23 +34,23 @@ for (const c of need) {
   if (!h) { console.log('  取不到', c.name, url); continue; }
   const one = re => { const m = h.match(re); return m ? GG + m[0] : null; };
 
-  if (!c.art) {
+  if (lacks(c, 'art')) {
     const u = one(/images\/iconrolepile\/[A-Za-z0-9_.\-]+\.png/);
     if (u) supp[`assets/img/art/${c.id}.png`] = u;
   }
-  if (c.chains.some(x => !x.ic)) {
+  if (lacks(c, 'chain')) {
     const m = h.match(/images\/icondevice\/T_IconDevice_([A-Za-z0-9]+)M1_UI\.png/);
     if (m) for (let i = 1; i <= 6; i++)
       supp[`assets/img/chain/${c.id}_${i}.png`] = GG + `images/icondevice/T_IconDevice_${m[1]}M${i}_UI.png`;
   }
-  if (c.skills.some(x => !x.ic)) {
+  if (lacks(c, 'skill')) {
     const map = { B1: 'skill', C1: 'ult', Y: 'forte', QTE: 'intro', T: 'outro', D1: 'passive1', D2: 'passive2' };
     for (const [suf, key] of Object.entries(map)) {
       const m = h.match(new RegExp(`images/iconskill/SP_Icon[A-Za-z0-9]+${suf}\\.png`));
       if (m) supp[`assets/img/skill/${c.id}_${key}.png`] = GG + m[0];
     }
   }
-  if (c.asc.some(a => !a.ic)) {
+  if (lacks(c, 'item')) {
     const spec = one(/images\/items\/T_IconC_\d+_UI\.png/);
     const coreFF = h.match(/images\/items\/T_IconMout_[A-Z]_\d+_4_UI\.png/);
     const boss = [...h.matchAll(/images\/items\/T_IconMout_(?:[A-Z]_)?\d+_UI\.png/g)].map(m => m[0])[0];
@@ -75,7 +80,11 @@ echoes.forEach((e, i) => {
 });
 
 /* 把 supp 對應寫回，供 build 使用 */
-const patch = { images: supp, charItem: {}, echoIc: {} };
+let patch = { images: {}, charItem: {}, echoIc: {} };
+if (fs.existsSync('supp.json')) {
+  try { patch = JSON.parse(fs.readFileSync('supp.json', 'utf8')); } catch (e) { }
+}
+Object.assign(patch.images, supp);
 for (const c of chars) c.asc.forEach((a, i) => { if (a._supp && supp[a._supp]) patch.charItem[c.id + '|' + i] = a._supp; });
 for (const e of echoes) if (e._supp && supp[e._supp]) patch.echoIc[e.cn] = e._supp;
 fs.writeFileSync('supp.json', JSON.stringify(patch, null, 1));

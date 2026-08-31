@@ -2,5 +2,8 @@
   "name": "wuwa-guide-tools",
   "private": true,
   "type": "module",
-  "dependencies": { "opencc-js": "^1.4.1" }
+  "dependencies": {
+    "opencc-js": "^1.4.1",
+    "tiny-pinyin": "^1.3.2"
+  }
 }
