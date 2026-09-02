@@ -38,6 +38,13 @@ for (const f of ['characters.js', 'weapons.js', 'echoes.js', 'sonatas.js', 'asce
   fs.copyFileSync(path.join(SITE, 'data', f), path.join(bak, f));
 console.log('已備份目前資料到 data/_prev（上次產生日期：' + (stamp ? stamp[1] : '未知') + '）\n');
 
+console.log('════════════════════════════════════════════════════');
+console.log('  鳴潮攻略站 · 資料更新');
+console.log('  會自動抓 BWIKI 與庫街區官方 WIKI 的最新內容');
+console.log('  新角色、新武器、新聲骸、新套裝、新攻略都會一併補進來');
+console.log('  約需 3～8 分鐘，請不要關閉視窗');
+console.log('════════════════════════════════════════════════════');
+
 const t0 = Date.now();
 for (let i = 0; i < STEPS.length; i++) {
   const [file, desc] = STEPS[i];

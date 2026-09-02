@@ -180,7 +180,11 @@ function autofill(c) {
     if (p['屬性傷害加成']) { p[c.el + '傷害加成'] = p['屬性傷害加成']; delete p['屬性傷害加成']; }
     c.panel = p;
   }
-  if (noSub) c.sub = (SUB_BY_ROLE[role] || SUB_BY_ROLE['主C']).slice();
+  if (noSub) {
+    /* 官方有列副詞條優先序就用官方的，沒有才用定位推估 */
+    const off = String(c.subText || '').split(/[＞>]/).map(x => x.replace(/[（(].*?[）)]/g, '').trim()).filter(Boolean);
+    c.sub = off.length >= 2 ? off.slice(0, 6) : (SUB_BY_ROLE[role] || SUB_BY_ROLE['主C']).slice();
+  }
   if (noBuff) {
     const outro = (c.skills || []).find(s => s.k === '延奏技能');
     c.buff = outro && outro.desc

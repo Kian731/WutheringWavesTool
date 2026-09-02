@@ -502,3 +502,32 @@ label.sw.tiny input{width:13px;height:13px}
 
 .srcbadge.auto{border-color:#ffb27a;color:#ffb27a}
 .badge-role.auto{border-color:#ffb27a;color:#ffb27a}
+
+/* 備份 / 換裝置同步 */
+.synctxt{width:100%;height:96px;padding:9px 11px;border-radius:10px;border:1px solid var(--line);
+  background:var(--bg3);color:var(--tx2);font-size:11.5px;font-family:ui-monospace,Consolas,monospace;
+  resize:vertical;word-break:break-all;line-height:1.5}
+.synctxt:focus{outline:none;border-color:var(--acc)}
+.impgroup{display:inline-flex;align-items:center;gap:6px;flex-wrap:wrap;font-size:12px;color:var(--tx3);
+  border:1px dashed var(--line);border-radius:10px;padding:4px 10px}
+.pi-warn{font-size:10.5px;color:#ffb27a;margin-top:4px}
+@media(max-width:768px){
+  .impgroup{width:100%;justify-content:flex-start}
+  .synctxt{height:110px;font-size:11px}
+}
+
+/* 批次設定 */
+#syncbar{display:flex;gap:8px;flex-wrap:wrap}
+.bulklist{display:flex;flex-direction:column;gap:6px;margin-bottom:14px}
+.bulkrow{display:flex;align-items:center;gap:9px;background:var(--bg3);border:1px solid var(--line);
+  border-radius:10px;padding:7px 11px;cursor:pointer}
+.bulkrow input[type=checkbox]{width:16px;height:16px;accent-color:var(--acc);cursor:pointer;flex:0 0 auto}
+.bulkrow .bl{flex:1;font-size:13px;font-weight:700;color:var(--tx2);min-width:96px}
+.bulkrow select{padding:4px 8px;border-radius:7px;border:1px solid var(--line);background:var(--bg2);
+  color:var(--tx);font-size:12.5px;font-family:inherit;cursor:pointer}
+.bulkrow .bh{font-style:normal;font-size:10.5px;color:var(--tx3);flex:0 0 auto}
+@media(max-width:768px){
+  .bulkrow{flex-wrap:wrap;gap:6px;padding:6px 9px}
+  .bulkrow .bl{flex:1 1 auto;min-width:0;font-size:12px}
+  .bulkrow .bh{flex:1 1 100%;padding-left:25px}
+}

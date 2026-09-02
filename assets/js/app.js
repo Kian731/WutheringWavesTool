@@ -617,6 +617,102 @@
     set: function (k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) { } }
   };
   var K_ROSTER = 'ww_roster', K_PLAN = 'ww_plan', K_OWN = 'ww_owned_mats';
+
+  /* ================= 備份與換裝置同步 =================
+   * 網站是純靜態的、沒有伺服器，練度只存在各自瀏覽器裡，
+   * 所以用「匯出一段代碼 → 到另一台貼上」的方式搬資料。
+   */
+  function b64enc(str) {
+    var b = new TextEncoder().encode(str), out = '';
+    for (var i = 0; i < b.length; i += 0x8000) out += String.fromCharCode.apply(null, b.subarray(i, i + 0x8000));
+    return btoa(out);
+  }
+  function b64dec(b) {
+    var raw = atob(String(b).replace(/\s+/g, ''));
+    var arr = new Uint8Array(raw.length);
+    for (var i = 0; i < raw.length; i++) arr[i] = raw.charCodeAt(i);
+    return new TextDecoder().decode(arr);
+  }
+  function snapshot() {
+    return {
+      v: 1, app: 'wuwa-guide', t: new Date().toISOString(),
+      roster: Store.get(K_ROSTER, {}),
+      plan: Store.get(K_PLAN, { items: [] }),
+      mats: Store.get(K_OWN, {})
+    };
+  }
+  function summarize(d) {
+    var owned = Object.values(d.roster || {}).filter(function (r) { return r && r.own; }).length;
+    return '角色 ' + owned + ' 位｜養成計劃 ' + ((d.plan && d.plan.items || []).length) +
+      ' 項｜素材庫存 ' + Object.keys(d.mats || {}).length + ' 種' +
+      (d.t ? '｜備份於 ' + String(d.t).slice(0, 16).replace('T', ' ') : '');
+  }
+  function syncBox() {
+    var snap = snapshot(), code = b64enc(JSON.stringify(snap));
+    lightbox(
+      '<h3 style="margin:0 0 4px">備份 · 換裝置同步</h3>' +
+      '<div class="dim2" style="margin-bottom:12px">練度只存在這台裝置的瀏覽器裡。要換手機或電腦時，' +
+      '在原本那台按「複製代碼」，到新裝置的同一頁貼上再按匯入就好。</div>' +
+      '<h4 class="lb-h4">① 這台裝置的資料</h4>' +
+      '<div class="dim2" style="margin-bottom:6px">' + esc(summarize(snap)) + '</div>' +
+      '<textarea class="synctxt" id="sy_out" readonly>' + esc(code) + '</textarea>' +
+      '<div class="planbtns">' +
+      '<button class="btn" id="sy_copy">複製代碼</button>' +
+      '<button class="btn ghost" id="sy_file">下載成檔案</button></div>' +
+      '<h4 class="lb-h4">② 從別的裝置匯入</h4>' +
+      '<div class="dim2" style="margin-bottom:6px">把代碼貼進來，或選擇之前下載的備份檔。</div>' +
+      '<textarea class="synctxt" id="sy_in" placeholder="在這裡貼上代碼…"></textarea>' +
+      '<div class="planbtns">' +
+      '<button class="btn" id="sy_load">匯入（覆蓋本機資料）</button>' +
+      '<label class="btn ghost" style="cursor:pointer">選擇備份檔<input type="file" id="sy_pick" accept=".json,.txt" hidden></label>' +
+      '</div><div id="sy_msg" class="note" style="display:none"></div>');
+
+    var msg = byId('sy_msg');
+    function say(t, ok) { msg.style.display = 'block'; msg.innerHTML = (ok ? '✓ ' : '⚠ ') + esc(t); }
+
+    byId('sy_copy').onclick = function () {
+      var ta = byId('sy_out');
+      ta.select(); ta.setSelectionRange(0, 999999);
+      var done = false;
+      try { done = document.execCommand('copy'); } catch (e) { }
+      if (!done && navigator.clipboard) { navigator.clipboard.writeText(ta.value); done = true; }
+      say(done ? '已複製，到另一台裝置貼上即可。' : '複製失敗，請手動全選複製。', done);
+    };
+    byId('sy_file').onclick = function () {
+      var blob = new Blob([JSON.stringify(snap, null, 1)], { type: 'application/json' });
+      var a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = 'wuwa-練度備份-' + new Date().toISOString().slice(0, 10) + '.json';
+      a.click();
+      setTimeout(function () { URL.revokeObjectURL(a.href); }, 3000);
+      say('已下載備份檔。', 1);
+    };
+    function apply(text) {
+      var d = null;
+      try { d = JSON.parse(text); } catch (e) { }
+      if (!d) { try { d = JSON.parse(b64dec(text)); } catch (e) { } }
+      if (!d || !d.roster) { say('看不懂這段內容，請確認是本站產生的代碼或備份檔。'); return; }
+      if (!confirm('要用這份資料覆蓋本機練度嗎？\n\n' + summarize(d) + '\n\n覆蓋後無法復原。')) return;
+      Store.set(K_ROSTER, d.roster || {});
+      Store.set(K_PLAN, d.plan || { items: [] });
+      Store.set(K_OWN, d.mats || {});
+      say('匯入完成，重新整理中…', 1);
+      setTimeout(function () { location.reload(); }, 700);
+    }
+    byId('sy_load').onclick = function () {
+      var v = byId('sy_in').value.trim();
+      if (!v) { say('請先貼上代碼。'); return; }
+      apply(v);
+    };
+    byId('sy_pick').onchange = function (e) {
+      var f = e.target.files && e.target.files[0];
+      if (!f) return;
+      var fr = new FileReader();
+      fr.onload = function () { apply(String(fr.result).trim()); };
+      fr.readAsText(f);
+    };
+  }
+
   var LV_OPTS = [0, 20, 40, 50, 60, 70, 80, 90];
   function lvLabel(v) { return v === 0 ? '未養成' : 'Lv.' + v; }
 
@@ -785,6 +881,8 @@
               '<label class="sw tiny"><input type="checkbox" data-i="' + i + '" data-f="nodes"' +
               (it.nodes !== 0 ? ' checked' : '') + '><span>含固有技能／屬性加成</span></label>' +
               '</div>' : '') +
+            (it.k === 'c' && !tiersOf('c', it.id) ? '<div class="pi-warn">wiki 尚未提供突破素材，只會算技能部分</div>' : '') +
+            (it.k === 'c' && !(w.WW_ASC.skills || {})[it.id] ? '<div class="pi-warn">wiki 尚未提供技能升級素材</div>' : '') +
             '</div>' +
             '<button class="pi-x" data-del="' + i + '" title="移除">✕</button></div>';
         }).join('') : '<div class="empty">還沒有選擇任何角色或武器</div>') +
@@ -792,8 +890,12 @@
         '<div class="planbtns">' +
         '<button class="btn" id="addChar">＋ 加入角色</button>' +
         '<button class="btn" id="addWep">＋ 加入武器</button>' +
-        '<button class="btn ghost" id="fromRoster">從我的角色帶入未畢業</button>' +
+        '<span class="impgroup">從我的角色帶入：' +
+        '<button class="btn ghost sm" id="impLv">角色等級</button>' +
+        '<button class="btn ghost sm" id="impSk">技能等級</button>' +
+        '<button class="btn ghost sm" id="impWep">武器等級</button></span>' +
         (plan.items.length ? '<button class="btn ghost" id="clearAll">清空</button>' : '') +
+        '<button class="btn ghost" id="syncOpen">備份 · 換裝置同步</button>' +
         '</div></div>' +
 
         '<div class="sec"><h2>需要的突破素材' +
@@ -852,21 +954,63 @@
           clearTimeout(i._t); i._t = setTimeout(function () { var a = document.activeElement === i; render(); if (a) { var n2 = host.querySelector('.ownin[data-n="' + CSS.escape(i.dataset.n) + '"]'); if (n2) { n2.focus(); n2.setSelectionRange(n2.value.length, n2.value.length); } } }, 500);
         };
       });
-      var b1 = byId('addChar'), b2 = byId('addWep'), b3 = byId('fromRoster'),
+      var b1 = byId('addChar'), b2 = byId('addWep'),
         b4 = byId('clearAll'), b5 = byId('clearOwn');
       if (b1) b1.onclick = function () { picker('c', function (id) { add('c', id); }); };
       if (b2) b2.onclick = function () { picker('w', function (n) { add('w', n); }); };
       if (b4) b4.onclick = function () { if (confirm('清空所有養成對象？')) { plan.items = []; save(); render(); } };
       if (b5) b5.onclick = function () { if (confirm('清空所有持有數量？')) { own = {}; Store.set(K_OWN, own); render(); } };
-      if (b3) b3.onclick = function () {
+      var b6 = byId('syncOpen'); if (b6) b6.onclick = syncBox;
+      /* 取得（必要時建立）某角色在計劃裡的項目；新建時預設「什麼都不算」，
+         由按下的那顆按鈕決定要開啟哪一個維度，避免互相蓋掉 */
+      function itemFor(id) {
+        var it = plan.items.filter(function (x) { return x.k === 'c' && x.id === id; })[0];
+        if (!it) { it = { k: 'c', id: id, from: 90, to: 90, sk: 10, skTo: 10, nodes: 0 }; plan.items.push(it); }
+        return it;
+      }
+      function skillMin(r) {
+        var mn = 10;
+        ['basic', 'skill', 'forte', 'ult', 'intro'].forEach(function (k) {
+          var v = (r.sk && r.sk[k] != null) ? r.sk[k] : ((r.done || {}).skill ? 10 : 1);
+          if (v < mn) mn = v;
+        });
+        return mn;
+      }
+      function eachOwned(fn) {
         var R = Store.get(K_ROSTER, {}), n = 0;
         Object.keys(R).forEach(function (id) {
-          var r = R[id]; if (!r || !r.own) return;
-          if ((r.lv || 0) < 90) { if (!plan.items.some(function (x) { return x.k === 'c' && x.id === id; })) { var mn = 10; ['basic','skill','forte','ult','intro'].forEach(function (k2) { var v = (r.sk && r.sk[k2] != null) ? r.sk[k2] : ((r.done||{}).skill ? 10 : 1); if (v < mn) mn = v; }); plan.items.push({ k: 'c', id: id, from: r.lv || 0, to: 90, sk: mn, skTo: 10, nodes: 1 }); n++; } }
-          if (r.wep && (r.wlv || 0) < 90) { if (!plan.items.some(function (x) { return x.k === 'w' && x.id === r.wep; })) { plan.items.push({ k: 'w', id: r.wep, from: r.wlv || 0, to: 90 }); n++; } }
+          var r = R[id];
+          if (!r || !r.own) return;
+          if (!w.WW_CHARACTERS.some(function (c) { return c.id === id; })) return;
+          if (fn(id, r)) n++;
         });
         save(); render();
-        if (!n) alert('「我的角色」裡沒有還沒滿等的項目，或還沒設定過。');
+        return n;
+      }
+      var bLv = byId('impLv'), bSk = byId('impSk'), bWep = byId('impWep');
+      if (bLv) bLv.onclick = function () {
+        var n = eachOwned(function (id, r) {
+          if ((r.lv || 0) >= 90) return false;
+          var it = itemFor(id); it.from = r.lv || 0; it.to = 90; return true;
+        });
+        if (!n) alert('沒有角色等級還沒到 90 的（或「我的角色」還沒設定）。');
+      };
+      if (bSk) bSk.onclick = function () {
+        var n = eachOwned(function (id, r) {
+          var mn = skillMin(r);
+          if (mn >= 10) return false;
+          var it = itemFor(id); it.sk = mn; it.skTo = 10; it.nodes = 1; return true;
+        });
+        if (!n) alert('沒有技能還沒滿 10 級的角色（或「我的角色」還沒設定）。');
+      };
+      if (bWep) bWep.onclick = function () {
+        var n = eachOwned(function (id, r) {
+          if (!r.wep || (r.wlv || 0) >= 90) return false;
+          if (plan.items.some(function (x) { return x.k === 'w' && x.id === r.wep; })) return false;
+          plan.items.push({ k: 'w', id: r.wep, from: r.wlv || 0, to: 90 });
+          return true;
+        });
+        if (!n) alert('沒有還沒滿等的武器（或「我的角色」裡還沒設定武器）。');
       };
     }
     render();
@@ -935,6 +1079,96 @@
       SK_KEYS.forEach(function (s) { var el = byId('e_sk_' + s.slug); if (el) r.sk[s.slug] = +el.value; });
       r.done = { set: byId('e_set').checked ? 1 : 0, echo: byId('e_echo').checked ? 1 : 0 };
       r.ec = [0, 1, 2, 3, 4].map(function (i) { var el = byId('e_ec' + i); return el ? +el.value : ((r.ec || [])[i] || 0); });
+    }
+
+
+    /* ===== 批次設定 =====
+     * 只套用在「目前篩選出來的角色」上，而且只改有勾選的欄位，
+     * 沒勾的維持原樣，避免一次把不想動的資料蓋掉。
+     */
+    function bulkBox() {
+      var list = lastList.slice();
+      if (!list.length) { alert('目前篩選結果是空的，請先調整上方篩選條件。'); return; }
+      var names = list.map(function (c) { return c.name; });
+      var lvOpt = function (id) {
+        return '<select id="' + id + '">' + LV_OPTS.map(function (v) {
+          return '<option value="' + v + '"' + (v === 90 ? ' selected' : '') + '>' + lvLabel(v) + '</option>';
+        }).join('') + '</select>';
+      };
+      var numOpt = function (id, arr, def) {
+        return '<select id="' + id + '">' + arr.map(function (v) {
+          return '<option value="' + v + '"' + (v === def ? ' selected' : '') + '>' + v + '</option>';
+        }).join('') + '</select>';
+      };
+      var row = function (key, label, ctrl, hint) {
+        return '<label class="bulkrow"><input type="checkbox" id="ck_' + key + '">' +
+          '<span class="bl">' + esc(label) + '</span>' + ctrl +
+          (hint ? '<i class="bh">' + esc(hint) + '</i>' : '') + '</label>';
+      };
+
+      lightbox(
+        '<h3 style="margin:0 0 4px">批次設定</h3>' +
+        '<div class="dim2">會套用到<b>目前篩選出的 ' + list.length + ' 位角色</b>：' +
+        esc(names.slice(0, 12).join('、')) + (names.length > 12 ? ' …等 ' + names.length + ' 位' : '') + '</div>' +
+        '<div class="note" style="margin:10px 0">只有<b>勾起來</b>的項目會被覆蓋，沒勾的維持原樣。想只改一部分角色，先用上方的篩選（屬性／星級／顯示）縮小範圍再進來。</div>' +
+
+        '<div class="planbtns" style="margin-bottom:12px">' +
+        '<button class="btn sm" id="bk_full">套用「滿練」預設</button>' +
+        '<button class="btn ghost sm" id="bk_none">全部取消勾選</button></div>' +
+
+        '<div class="bulklist">' +
+        row('own', '擁有', '<select id="v_own"><option value="1">標記為擁有</option><option value="0">標記為未擁有</option></select>') +
+        row('lv', '角色等級', lvOpt('v_lv')) +
+        row('m', '共鳴鏈', numOpt('v_m', [0, 1, 2, 3, 4, 5, 6], 0)) +
+        row('sk', '技能等級', numOpt('v_sk', [1, 2, 3, 4, 5, 6, 7, 8, 9, 10], 10), '五個技能一起') +
+        row('ec', '聲骸等級', numOpt('v_ec', ECHO_LV, ECHO_MAX), '五格一起') +
+        row('wlv', '武器等級', lvOpt('v_wlv'), '只套用已設定武器的角色') +
+        row('wr', '武器精煉', numOpt('v_wr', [1, 2, 3, 4, 5], 1), '只套用已設定武器的角色') +
+        row('set', '聲骸套裝已配好', '<select id="v_set"><option value="1">是</option><option value="0">否</option></select>') +
+        row('echo', '主聲骸已到位', '<select id="v_echo"><option value="1">是</option><option value="0">否</option></select>') +
+        '</div>' +
+        '<div class="planbtns"><button class="btn" id="bk_apply">套用到這 ' + list.length + ' 位</button></div>');
+
+      var KEYS = ['own', 'lv', 'm', 'sk', 'ec', 'wlv', 'wr', 'set', 'echo'];
+      byId('bk_none').onclick = function () { KEYS.forEach(function (k) { byId('ck_' + k).checked = false; }); };
+      byId('bk_full').onclick = function () {
+        KEYS.forEach(function (k) { byId('ck_' + k).checked = ['own', 'lv', 'sk', 'ec', 'wlv', 'set', 'echo'].indexOf(k) >= 0; });
+        byId('v_own').value = '1'; byId('v_lv').value = '90'; byId('v_sk').value = '10';
+        byId('v_ec').value = String(ECHO_MAX); byId('v_wlv').value = '90';
+        byId('v_set').value = '1'; byId('v_echo').value = '1';
+      };
+      byId('bk_apply').onclick = function () {
+        var on = {};
+        KEYS.forEach(function (k) { if (byId('ck_' + k).checked) on[k] = byId('v_' + k).value; });
+        var picked = Object.keys(on);
+        if (!picked.length) { alert('至少要勾選一個要設定的項目。'); return; }
+        if (!confirm('要把「' + picked.length + ' 個項目」套用到 ' + list.length + ' 位角色嗎？\n\n這個動作無法復原（可先到「備份 · 換裝置同步」存一份）。')) return;
+
+        var noWeapon = 0;
+        list.forEach(function (c) {
+          var r = rec(c.id);
+          if (on.own != null) r.own = +on.own;
+          if (on.lv != null) r.lv = +on.lv;
+          if (on.m != null) r.m = +on.m;
+          if (on.sk != null) { r.sk = r.sk || {}; SK_KEYS.forEach(function (x) { r.sk[x.slug] = +on.sk; }); }
+          if (on.ec != null) r.ec = [0, 1, 2, 3, 4].map(function () { return +on.ec; });
+          if (on.wlv != null || on.wr != null) {
+            if (r.wep) {
+              if (on.wlv != null) r.wlv = +on.wlv;
+              if (on.wr != null) r.wr = +on.wr;
+            } else noWeapon++;
+          }
+          if (on.set != null || on.echo != null) {
+            r.done = r.done || {};
+            if (on.set != null) r.done.set = +on.set;
+            if (on.echo != null) r.done.echo = +on.echo;
+          }
+        });
+        save(); closeLB(); render();
+        if (noWeapon) setTimeout(function () {
+          alert('已套用。其中 ' + noWeapon + ' 位還沒設定武器，武器等級／精煉沒有套用到他們身上。');
+        }, 100);
+      };
     }
 
     function editor(c) {
@@ -1049,6 +1283,7 @@
       byId('e_save').onclick = function () { readForm(r); save(); closeLB(); render(); };
     }
 
+    var lastList = [];
     function render() {
       var grid = byId('grid'), cnt = byId('count');
       var list = w.WW_CHARACTERS.filter(function (c) {
@@ -1061,8 +1296,17 @@
         if (state.q && (c.name + ' ' + c.en).toLowerCase().indexOf(state.q) < 0) return false;
         return true;
       });
+      lastList = list;
       var ownedAll = w.WW_CHARACTERS.filter(function (c) { return (R[c.id] || {}).own; });
       var grad = ownedAll.filter(function (c) { return gaps(c).length === 0; });
+      var sb = byId('syncbar');
+      if (sb && !sb.dataset.done) {
+        sb.dataset.done = '1';
+        sb.innerHTML = '<button class="btn sm" id="bulkOpen">批次設定</button>' +
+          '<button class="btn ghost sm" id="sy_open">備份 · 換裝置同步</button>';
+        byId('sy_open').onclick = syncBox;
+        byId('bulkOpen').onclick = function () { bulkBox(); };
+      }
       byId('summary').innerHTML =
         '<div class="stat"><b>' + ownedAll.length + '</b><span>已擁有</span></div>' +
         '<div class="stat"><b>' + grad.length + '</b><span>已畢業</span></div>' +
