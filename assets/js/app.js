@@ -22,11 +22,14 @@
   function qs(k) { return new URLSearchParams(location.search).get(k); }
   function byId(x) { return document.getElementById(x); }
 
-  function thumb(src, fallbackText, cls) {
+  /* inner：要疊在圖片上的徽章。必須放在 .thumb 裡面，
+     否則會以 .card 為定位基準而蓋到卡片下方的文字。 */
+  function thumb(src, fallbackText, cls, inner) {
     var f = esc(String(fallbackText || '?').slice(0, 2));
     return '<div class="thumb ' + (cls || '') + '">' +
       '<span class="fallback">' + f + '</span>' +
       (src ? '<img loading="lazy" src="' + esc(src) + '" alt="" onerror="this.remove()">' : '') +
+      (inner || '') +
       '</div>';
   }
   function icon(src, alt, cls) {
@@ -272,13 +275,13 @@
       list.sort(function (a, b) { var r = f(a, b); return state.desc ? -r : r; });
       cnt.textContent = list.length + ' / ' + w.WW_CHARACTERS.length + ' 位共鳴者';
       grid.innerHTML = list.map(function (c) {
-        return '<a class="card r' + c.r + '" href="character.html?id=' + encodeURIComponent(c.id) + '">' +
-          thumb(c.icon, c.name) +
-          '<span class="badge-el" style="border-color:' + EL_COLOR[c.el] + ';color:' + EL_COLOR[c.el] + '">' +
+        var ov = '<span class="badge-el" style="border-color:' + EL_COLOR[c.el] + ';color:' + EL_COLOR[c.el] + '">' +
           '<img src="' + esc(c.elIc) + '" alt="" onerror="this.remove()">' + c.el + '</span>' +
           (c.tier ? '<span class="badge-tier t-' + c.tier + '">' + c.tier + '</span>' : '') +
           '<span class="badge-role' + (c.auto ? ' auto' : '') + '" title="' +
-          (c.auto ? '定位為系統依技能文字推估' : '') + '">' + esc(c.role[0]) + (c.auto ? '?' : '') + '</span>' +
+          (c.auto ? '定位為系統依技能文字推估' : '') + '">' + esc(c.role[0]) + (c.auto ? '?' : '') + '</span>';
+        return '<a class="card r' + c.r + '" href="character.html?id=' + encodeURIComponent(c.id) + '">' +
+          thumb(c.icon, c.name, '', ov) +
           '<div class="cbody"><div class="cname">' + esc(c.name) + '</div>' +
           '<div class="cmeta"><span class="stars">' + stars(c.r) + '</span>' +
           icon(c.wpIc, c.wp) + '<span class="hide-xs">' + esc(c.wp) + '</span></div>' +
@@ -454,7 +457,7 @@
         var scope = (x.fx || []).indexOf('隊伍增益') >= 0 ? '<span class="badge-scope team">隊伍</span>'
           : ((x.fx || []).indexOf('自身增益') >= 0 ? '<span class="badge-scope">自身</span>' : '');
         return '<a class="card r' + x.r + '" href="weapon.html?n=' + encodeURIComponent(x.n) + '">' +
-          thumb(x.ic, x.n) + scope +
+          thumb(x.ic, x.n, '', scope) +
           '<div class="cbody"><div class="cname">' + esc(x.n) + '</div>' +
           '<div class="cmeta"><span class="stars">' + stars(x.r) + '</span>' +
           icon(x.wpIc, x.t) + '<span class="hide-xs">' + esc(x.sub && x.sub !== '—' ? x.sub : x.t) + '</span></div>' +
@@ -604,8 +607,8 @@
       '<div class="stat"><b>' + w.WW_ECHOES.length + '</b><span>聲骸</span></div>';
     var neu = byId('newest');
     if (neu) neu.innerHTML = w.WW_CHARACTERS.slice(0, 8).map(function (c) {
-      return '<a class="card r' + c.r + '" href="character.html?id=' + c.id + '">' + thumb(c.icon, c.name) +
-        '<span class="badge-el" style="border-color:' + EL_COLOR[c.el] + ';color:' + EL_COLOR[c.el] + '"><img src="' + esc(c.elIc) + '" alt="" onerror="this.remove()">' + c.el + '</span>' +
+      return '<a class="card r' + c.r + '" href="character.html?id=' + c.id + '">' +
+        thumb(c.icon, c.name, '', '<span class="badge-el" style="border-color:' + EL_COLOR[c.el] + ';color:' + EL_COLOR[c.el] + '"><img src="' + esc(c.elIc) + '" alt="" onerror="this.remove()">' + c.el + '</span>') +
         '<div class="cbody"><div class="cname">' + esc(c.name) + '</div>' +
         '<div class="cmeta"><span class="stars">' + stars(c.r) + '</span>' + icon(c.wpIc, c.wp) + '</div></div></a>';
     }).join('');
@@ -617,6 +620,40 @@
     set: function (k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) { } }
   };
   var K_ROSTER = 'ww_roster', K_PLAN = 'ww_plan', K_OWN = 'ww_owned_mats';
+  /* 遊戲裡可個別升級的五個技能（延奏與固有技能不獨立升級） */
+  var SK5 = [
+    { k: '常態攻擊', slug: 'basic' }, { k: '共鳴技能', slug: 'skill' },
+    { k: '共鳴迴路', slug: 'forte' }, { k: '共鳴解放', slug: 'ult' },
+    { k: '變奏技能', slug: 'intro' }
+  ];
+  var SK_MAXLV = 10;
+  /* 從「我的角色」讀某角色的實際技能等級 */
+  function rosterSkills(id) {
+    var r = (Store.get(K_ROSTER, {}) || {})[id];
+    var o = {};
+    SK5.forEach(function (s) {
+      var v = (r && r.sk && r.sk[s.slug] != null) ? r.sk[s.slug]
+        : ((r && (r.done || {}).skill) ? SK_MAXLV : 1);
+      o[s.slug] = Math.min(SK_MAXLV, Math.max(1, +v || 1));
+    });
+    return o;
+  }
+  /* 舊資料（sk 是數字、nodes 是 0/1）轉成新結構，並補齊缺漏欄位 */
+  function normItem(it) {
+    if (it.k !== 'c') return it;
+    if (typeof it.sk === 'number') { var v = it.sk; it.sk = {}; SK5.forEach(function (s) { it.sk[s.slug] = v; }); }
+    if (!it.sk || typeof it.sk !== 'object') it.sk = {};
+    if (typeof it.skTo === 'number') { var t = it.skTo; it.skTo = {}; SK5.forEach(function (s) { it.skTo[s.slug] = t; }); }
+    if (!it.skTo || typeof it.skTo !== 'object') it.skTo = {};
+    SK5.forEach(function (s) {
+      if (it.sk[s.slug] == null) it.sk[s.slug] = 1;
+      if (it.skTo[s.slug] == null) it.skTo[s.slug] = SK_MAXLV;
+    });
+    var nb = ((w.WW_ASC && w.WW_ASC.skills && w.WW_ASC.skills[it.id] && w.WW_ASC.skills[it.id].branch) || []).length;
+    if (typeof it.nodes === 'number') { var on = it.nodes ? 1 : 0; it.nodes = {}; for (var i = 0; i < nb; i++) it.nodes[i] = on; }
+    if (!it.nodes || typeof it.nodes !== 'object') { it.nodes = {}; for (var j = 0; j < nb; j++) it.nodes[j] = 1; }
+    return it;
+  }
 
   /* ================= 備份與換裝置同步 =================
    * 網站是純靜態的、沒有伺服器，練度只存在各自瀏覽器裡，
@@ -722,7 +759,6 @@
     return kind === 'c' ? A.chars[key] : A.weapons[key];
   }
   /* 把選定的項目換算成素材總需求（突破＋技能升級＋分支節點） */
-  var SK_COUNT = 5;               // 常態攻擊／共鳴技能／共鳴迴路／共鳴解放／變奏技能
   function needsOf(items) {
     var A = w.WW_ASC, need = {};
     if (!A) return need;
@@ -735,12 +771,17 @@
       if (it.k !== 'c') return;
       var sc = (A.skills || {})[it.id];
       if (!sc) return;
-      var a = Math.max(1, it.sk || 1), b = Math.min(10, it.skTo == null ? 10 : it.skTo);
-      /* lv[0] 是 1→2 的花費，依此類推；五個技能都要各升一次 */
-      for (var L = a; L < b; L++) (sc.lv[L - 1] || []).forEach(function (m) {
-        need[m.n] = (need[m.n] || 0) + m.q * SK_COUNT;
+      normItem(it);
+      /* 每個技能各自從自己的目前等級升到自己的目標；lv[0] 是 1→2 的花費 */
+      SK5.forEach(function (sk) {
+        var a = Math.max(1, it.sk[sk.slug] || 1);
+        var b = Math.min(SK_MAXLV, it.skTo[sk.slug] == null ? SK_MAXLV : it.skTo[sk.slug]);
+        for (var L = a; L < b; L++) (sc.lv[L - 1] || []).forEach(add);
       });
-      if (it.nodes !== 0) (sc.branch || []).forEach(function (bn) { (bn.mats || []).forEach(add); });
+      /* 分支節點逐個判斷 */
+      (sc.branch || []).forEach(function (bn, i) {
+        if (it.nodes[i]) (bn.mats || []).forEach(add);
+      });
     });
     return need;
   }
@@ -818,6 +859,7 @@
   function pagePlan() {
     var host = byId('plan');
     var plan = Store.get(K_PLAN, { items: [] });
+    (plan.items || []).forEach(normItem);
     var own = Store.get(K_OWN, {});
     if (!w.WW_ASC) { host.innerHTML = '<div class="empty">找不到 data/ascension.js</div>'; return; }
 
@@ -836,8 +878,130 @@
     }
     function add(k, id) {
       if (plan.items.some(function (x) { return x.k === k && x.id === id; })) return;
-      plan.items.push({ k: k, id: id, from: 0, to: 90, sk: 1, skTo: 10, nodes: 1 });
+      var ni = { k: k, id: id, from: 0, to: 90 };
+      if (k === 'c') {
+        var R0 = Store.get(K_ROSTER, {})[id];
+        if (R0 && R0.own && R0.lv) ni.from = R0.lv;
+        ni.sk = rosterSkills(id);
+        ni.skTo = {}; SK5.forEach(function (s) { ni.skTo[s.slug] = SK_MAXLV; });
+        normItem(ni);
+      }
+      plan.items.push(ni);
       save(); render();
+    }
+
+
+    var openSk = {};                       /* 哪幾張卡展開了個別設定 */
+    var LV1_10 = Array.from({ length: 10 }, function (_, n) { return n + 1; });
+
+    function skillBlock(it, i) {
+      normItem(it);
+      var sc = (w.WW_ASC.skills || {})[it.id] || { lv: [], branch: [] };
+      var branch = sc.branch || [];
+      var cs0 = (w.WW_CHARACTERS.filter(function (x) { return x.id === it.id; })[0] || {}).skills || [];
+      var cur = SK5.map(function (s) { return it.sk[s.slug]; });
+      var tgt = SK5.map(function (s) { return it.skTo[s.slug]; });
+      var allSameTgt = tgt.every(function (v) { return v === tgt[0]; });
+      var nodeOn = branch.filter(function (_, k) { return it.nodes[k]; }).length;
+      var todo = SK5.some(function (s) { return it.skTo[s.slug] > it.sk[s.slug]; }) || nodeOn > 0;
+      var open = !!openSk[it.id];
+
+      var sum = '<span class="sksum">' + cur.join('·') + '</span>' +
+        '<span class="arrow">→</span>' +
+        '<span class="sksum tgt">' + (allSameTgt ? tgt[0] : tgt.join('·')) + '</span>' +
+        (branch.length ? '<span class="sknode">分支 ' + nodeOn + '/' + branch.length + '</span>' : '') +
+        (todo ? '' : '<span class="skdone">已滿</span>');
+
+      var rows = SK5.map(function (sk) {
+        var meta = cs0.filter(function (x) { return x.k === sk.k; })[0] || {};
+        var a = it.sk[sk.slug], b = it.skTo[sk.slug];
+        return '<label class="skrow' + (b > a ? '' : ' idle') + '">' +
+          '<span class="skn">' + icon(meta.ic, sk.k) + '<i>' + esc(sk.k) + '</i></span>' +
+          '<select data-i="' + i + '" data-sk="' + sk.slug + '" data-f="cur">' +
+          LV1_10.map(function (v) { return '<option value="' + v + '"' + (v === a ? ' selected' : '') + '>' + v + '</option>'; }).join('') +
+          '</select><span class="arrow">→</span>' +
+          '<select data-i="' + i + '" data-sk="' + sk.slug + '" data-f="tgt">' +
+          LV1_10.map(function (v) { return '<option value="' + v + '"' + (v === b ? ' selected' : '') + '>' + v + '</option>'; }).join('') +
+          '</select></label>';
+      }).join('');
+
+      var nodes = branch.length
+        ? '<div class="nodehead">分支節點（固有技能／屬性加成，各自一次性解鎖）</div>' +
+        '<div class="nodelist">' + branch.map(function (bn, k) {
+          var bic = (cs0.filter(function (x) { return x.k === bn.name; })[0] || {}).ic;
+          return '<label class="noderow"><input type="checkbox" data-i="' + i + '" data-node="' + k + '"' +
+            (it.nodes[k] ? ' checked' : '') + '>' + (bic ? icon(bic, bn.name) : '<span class="nodot"></span>') +
+            '<span>' + esc(bn.name) + '</span>' +
+            '<i>' + esc((bn.mats || []).map(function (m) { return m.n + '×' + m.q; }).join('、')) + '</i></label>';
+        }).join('') + '</div>'
+        : '<div class="dimtxt">wiki 尚未提供這位角色的分支節點資料</div>';
+
+      return '<div class="skblock' + (open ? ' open' : '') + '">' +
+        '<div class="skbar"><span class="skl">技能</span>' + sum +
+        '<button class="lnk" data-tog="' + i + '">' + (open ? '收合 ▴' : '個別設定 ▾') + '</button></div>' +
+        '<div class="skdetail"' + (open ? '' : ' hidden') + '>' +
+        '<div class="skrows">' + rows + '</div>' +
+        '<div class="planbtns tight">' +
+        '<button class="btn ghost sm" data-act="fromRoster" data-i="' + i + '">重設：我的角色等級 → 升滿 10</button>' +
+        '<button class="btn ghost sm" data-act="allTo10" data-i="' + i + '">目標全設 10</button>' +
+        '<button class="btn ghost sm" data-act="skNone" data-i="' + i + '">此角色不算技能</button>' +
+        '</div>' + nodes +
+        '<div class="planbtns tight">' +
+        '<button class="btn ghost sm" data-act="nodeAll" data-i="' + i + '">分支全選</button>' +
+        '<button class="btn ghost sm" data-act="nodeNone" data-i="' + i + '">分支全不選</button>' +
+        '</div></div></div>';
+    }
+
+
+    /* 素材一列一個太長，改成：同一條 3 換 1 合成線縱向疊成一張小卡，
+       不同合成線橫向並排；沒有合成關係的素材集中在最後一張卡。 */
+    function matGrid(rows) {
+      function cell(r) {
+        var m = (w.WW_ASC.mats[r.n]) || {};
+        var tip = r.n + '：需要 ' + r.need + '、持有 ' + r.own;
+        var sc = 'mrs', txt;
+        if (r.short === 0) {
+          sc += ' ok'; txt = '✓';
+          tip += r.craft > 0 ? '　庫存夠，但要在合成台合成 ' + r.craft + ' 個（消耗下階 ' + r.craft * 3 + '）' : '　已足夠';
+        } else {
+          sc += ' bad'; txt = r.short;
+          tip += r.craft > 0 ? '　合成補 ' + r.craft + ' 個之後仍缺 ' + r.short : '　還缺 ' + r.short;
+        }
+        if (r.spare > 0 && r.short === 0) tip += '　多 ' + r.spare;
+        return '<label class="mrow' + (r.short === 0 ? ' done' : '') + '" title="' + esc(tip) + '">' +
+          '<span class="mri">' + icon(m.ic, r.n) + '</span>' +
+          '<span class="mrn">' + esc(r.n) + '</span>' +
+          '<b class="mrq">' + r.need.toLocaleString() + '</b>' +
+          '<input class="ownin" type="number" min="0" data-n="' + esc(r.n) + '" value="' + (own[r.n] || '') + '" placeholder="0">' +
+          '<span class="' + sc + '">' + txt + (r.craft > 0 ? '<i class="craftdot" title="可用下階 3 換 1 補足">⚗</i>' : '') + '</span>' +
+          '</label>';
+      }
+      /* 依合成家族分組；同家族照階層由低到高（＝合成方向） */
+      var fams = {}, solo = [];
+      rows.forEach(function (r) { if (r.fam) (fams[r.fam] = fams[r.fam] || []).push(r); else solo.push(r); });
+      var order = Object.keys(fams).sort(function (a, b) {
+        function sum(f) { return fams[f].reduce(function (t, r) { return t + r.short; }, 0); }
+        return sum(b) - sum(a) || fams[b].length - fams[a].length;
+      });
+      solo.sort(function (a, b) { return b.short - a.short || b.need - a.need; });
+
+      var cards = order.map(function (f) {
+        var list = fams[f].slice().sort(function (a, b) { return a.tier - b.tier; });
+        var left = list.reduce(function (t, r) { return t + r.short; }, 0);
+        return '<div class="matcard' + (left ? '' : ' done') + '">' +
+          '<div class="mch"><span>' + esc(f.replace(/^的/, '')) + '</span>' +
+          '<i>' + (left ? '缺 ' + left : '齊了') + '</i></div>' +
+          list.map(cell).join('') + '</div>';
+      });
+      if (solo.length) {
+        var sl = solo.reduce(function (t, r) { return t + r.short; }, 0);
+        cards.push('<div class="matcard solo' + (sl ? '' : ' done') + '" title="沒有合成關係的素材（首領掉落、地區特產等）共 ' + solo.length + ' 種">' +
+          '<div class="mch"><span>單獨素材</span><i>' + (sl ? '缺 ' + sl : '齊了') + '</i></div>' +
+          solo.map(cell).join('') + '</div>');
+      }
+
+      return '<div class="matlegend"><span>素材</span><b>需要</b><em>持有</em><i>還缺</i></div>' +
+        '<div class="matgrid">' + cards.join('') + '</div>';
     }
 
     function render() {
@@ -868,19 +1032,7 @@
             '<select data-i="' + i + '" data-f="to">' +
             LV_OPTS.filter(function (v) { return v > 0; }).map(function (v) { return '<option value="' + v + '"' + (v === it.to ? ' selected' : '') + '>' + lvLabel(v) + '</option>'; }).join('') +
             '</select></div>' +
-            (it.k === 'c' && (w.WW_ASC.skills || {})[it.id] ?
-              '<div class="pi-lv"><label>技能 <select data-i="' + i + '" data-f="sk">' +
-              Array.from({ length: 10 }, function (_, n) { return n + 1; }).map(function (v) {
-                return '<option value="' + v + '"' + (v === (it.sk || 1) ? ' selected' : '') + '>' + v + '</option>';
-              }).join('') + '</select></label><span class="arrow">→</span>' +
-              '<select data-i="' + i + '" data-f="skTo">' +
-              Array.from({ length: 10 }, function (_, n) { return n + 1; }).map(function (v) {
-                return '<option value="' + v + '"' + (v === (it.skTo == null ? 10 : it.skTo) ? ' selected' : '') + '>' + v + '</option>';
-              }).join('') + '</select>' +
-              '<span class="dimtxt">×5 技能</span>' +
-              '<label class="sw tiny"><input type="checkbox" data-i="' + i + '" data-f="nodes"' +
-              (it.nodes !== 0 ? ' checked' : '') + '><span>含固有技能／屬性加成</span></label>' +
-              '</div>' : '') +
+            (it.k === 'c' && (w.WW_ASC.skills || {})[it.id] ? skillBlock(it, i) : '') +
             (it.k === 'c' && !tiersOf('c', it.id) ? '<div class="pi-warn">wiki 尚未提供突破素材，只會算技能部分</div>' : '') +
             (it.k === 'c' && !(w.WW_ASC.skills || {})[it.id] ? '<div class="pi-warn">wiki 尚未提供技能升級素材</div>' : '') +
             '</div>' +
@@ -904,21 +1056,7 @@
           '<div class="matbar">' +
           '<button class="btn ghost sm" id="clearOwn">清空持有數量</button>' +
           '<span class="dim">持有數量會存在這台裝置的瀏覽器裡</span></div>' +
-          '<div class="mattable"><div class="mt-head"><span>素材</span><span>需要</span><span>持有</span><span>還缺</span><span>備註</span></div>' +
-          rows.map(function (r) {
-            var m = (w.WW_ASC.mats[r.n]) || {};
-            var note = '';
-            if (r.short === 0 && r.craft > 0) note = '<span class="ok craft">庫存夠，但要合成 ' + r.craft + ' 個（消耗下階 ' + r.craft * 3 + '）</span>';
-            else if (r.short === 0) note = '<span class="ok">已足夠</span>';
-            else if (r.craft > 0) note = '<span class="warn">合成補 ' + r.craft + ' 個後仍缺 ' + r.short + '</span>';
-            else if (r.spare > 0) note = '';
-            return '<div class="mt-row' + (r.short === 0 ? ' done' : '') + '">' +
-              '<span class="mt-n">' + icon(m.ic, r.n, 'big') + '<b>' + esc(r.n) + '</b></span>' +
-              '<span class="mt-need">' + r.need + '</span>' +
-              '<span><input class="ownin" type="number" min="0" data-n="' + esc(r.n) + '" value="' + (own[r.n] || '') + '" placeholder="0"></span>' +
-              '<span class="mt-short">' + (r.short || '—') + '</span>' +
-              '<span class="mt-note">' + note + '</span></div>';
-          }).join('') + '</div>' +
+          matGrid(rows) +
           (craftable.length ? '<div class="note">「要合成」表示這階庫存不夠，但下階素材有多，到<b>合成台</b>用 3 個下階換 1 個上階就能補上，不必再去刷。</div>'
             : '<div class="note">同一系列的素材可在合成台以 3 換 1 往上合成；上面的「還缺」已經把下階多出來的量換算進去了。</div>') +
           (credit.length ? '<div class="creditrow">' + credit.map(function (r) {
@@ -930,16 +1068,49 @@
 
       host.querySelectorAll('select[data-i]').forEach(function (s) {
         s.onchange = function () {
-          var it = plan.items[+s.dataset.i];
-          it[s.dataset.f] = +s.value;
-          if (it.to <= it.from) it.to = 90;
-          if ((it.skTo == null ? 10 : it.skTo) < (it.sk || 1)) it.skTo = 10;
+          var it = normItem(plan.items[+s.dataset.i]);
+          if (s.dataset.sk) {                       /* 單一技能的目前／目標 */
+            var slug = s.dataset.sk, v = +s.value;
+            if (s.dataset.f === 'cur') {
+              it.sk[slug] = v;
+              if (it.skTo[slug] < v) it.skTo[slug] = v;
+            } else {
+              it.skTo[slug] = v;
+              if (v < it.sk[slug]) it.sk[slug] = v;
+            }
+          } else {
+            it[s.dataset.f] = +s.value;
+            if (it.to <= it.from) it.to = 90;
+          }
           save(); render();
         };
       });
-      host.querySelectorAll('input[type=checkbox][data-i]').forEach(function (b) {
+      host.querySelectorAll('input[type=checkbox][data-node]').forEach(function (b) {
         b.onchange = function () {
-          plan.items[+b.dataset.i][b.dataset.f] = b.checked ? 1 : 0;
+          var it = normItem(plan.items[+b.dataset.i]);
+          it.nodes[+b.dataset.node] = b.checked ? 1 : 0;
+          save(); render();
+        };
+      });
+      host.querySelectorAll('[data-tog]').forEach(function (b) {
+        b.onclick = function () {
+          var it = plan.items[+b.dataset.tog];
+          openSk[it.id] = !openSk[it.id];
+          render();
+        };
+      });
+      host.querySelectorAll('[data-act]').forEach(function (b) {
+        b.onclick = function () {
+          var it = normItem(plan.items[+b.dataset.i]);
+          var act = b.dataset.act;
+          /* 這顆就是「回到預設」：目前等級照我的角色，目標一律升滿 10 */
+          if (act === 'fromRoster') { it.sk = rosterSkills(it.id); SK5.forEach(function (s) { it.skTo[s.slug] = SK_MAXLV; }); }
+          if (act === 'allTo10') SK5.forEach(function (s) { it.skTo[s.slug] = SK_MAXLV; });
+          if (act === 'skNone') SK5.forEach(function (s) { it.skTo[s.slug] = it.sk[s.slug]; });
+          if (act === 'nodeAll' || act === 'nodeNone') {
+            var nb = ((w.WW_ASC.skills[it.id] || {}).branch || []).length;
+            for (var k = 0; k < nb; k++) it.nodes[k] = act === 'nodeAll' ? 1 : 0;
+          }
           save(); render();
         };
       });
@@ -951,7 +1122,7 @@
           var v = parseInt(i.value, 10);
           if (!v || v < 0) delete own[i.dataset.n]; else own[i.dataset.n] = v;
           Store.set(K_OWN, own);
-          clearTimeout(i._t); i._t = setTimeout(function () { var a = document.activeElement === i; render(); if (a) { var n2 = host.querySelector('.ownin[data-n="' + CSS.escape(i.dataset.n) + '"]'); if (n2) { n2.focus(); n2.setSelectionRange(n2.value.length, n2.value.length); } } }, 500);
+          clearTimeout(i._t); i._t = setTimeout(function () { var a = document.activeElement === i; render(); if (a) { var n2 = host.querySelector('.ownin[data-n="' + CSS.escape(i.dataset.n) + '"]'); if (n2) { n2.focus(); /* type=number 不支援 setSelectionRange，會丟例外 */ try { n2.setSelectionRange(n2.value.length, n2.value.length); } catch (e) {} } } }, 500);
         };
       });
       var b1 = byId('addChar'), b2 = byId('addWep'),
@@ -965,17 +1136,16 @@
          由按下的那顆按鈕決定要開啟哪一個維度，避免互相蓋掉 */
       function itemFor(id) {
         var it = plan.items.filter(function (x) { return x.k === 'c' && x.id === id; })[0];
-        if (!it) { it = { k: 'c', id: id, from: 90, to: 90, sk: 10, skTo: 10, nodes: 0 }; plan.items.push(it); }
+        if (!it) {
+          it = { k: 'c', id: id, from: 90, to: 90, sk: {}, skTo: {}, nodes: {} };
+          SK5.forEach(function (s) { it.sk[s.slug] = SK_MAXLV; it.skTo[s.slug] = SK_MAXLV; });
+          var nb = ((w.WW_ASC.skills[id] || {}).branch || []).length;
+          for (var k = 0; k < nb; k++) it.nodes[k] = 0;
+          plan.items.push(it);
+        }
         return it;
       }
-      function skillMin(r) {
-        var mn = 10;
-        ['basic', 'skill', 'forte', 'ult', 'intro'].forEach(function (k) {
-          var v = (r.sk && r.sk[k] != null) ? r.sk[k] : ((r.done || {}).skill ? 10 : 1);
-          if (v < mn) mn = v;
-        });
-        return mn;
-      }
+
       function eachOwned(fn) {
         var R = Store.get(K_ROSTER, {}), n = 0;
         Object.keys(R).forEach(function (id) {
@@ -996,10 +1166,15 @@
         if (!n) alert('沒有角色等級還沒到 90 的（或「我的角色」還沒設定）。');
       };
       if (bSk) bSk.onclick = function () {
-        var n = eachOwned(function (id, r) {
-          var mn = skillMin(r);
-          if (mn >= 10) return false;
-          var it = itemFor(id); it.sk = mn; it.skTo = 10; it.nodes = 1; return true;
+        var n = eachOwned(function (id) {
+          var lv = rosterSkills(id);
+          if (SK5.every(function (s) { return lv[s.slug] >= SK_MAXLV; })) return false;
+          var it = normItem(itemFor(id));
+          it.sk = lv;
+          SK5.forEach(function (s) { it.skTo[s.slug] = SK_MAXLV; });
+          var nb = ((w.WW_ASC.skills[id] || {}).branch || []).length;
+          for (var k = 0; k < nb; k++) it.nodes[k] = 1;
+          return true;
         });
         if (!n) alert('沒有技能還沒滿 10 級的角色（或「我的角色」還沒設定）。');
       };
@@ -1086,6 +1261,34 @@
      * 只套用在「目前篩選出來的角色」上，而且只改有勾選的欄位，
      * 沒勾的維持原樣，避免一次把不想動的資料蓋掉。
      */
+
+    /* 專武＝官方武器推薦裡排第一、且是 5★ 限時武器活動的那把；
+       常駐 5★ 或四星不算專武，精煉數就不顯示。 */
+    function sigWeaponOf(c) {
+      var names = String((c.build && c.build.weapon) || '')
+        .split(/[＞>／/、,]/).map(function (x) { return x.replace(/[（(][^）)]*[）)]/g, '').trim(); })
+        .filter(Boolean);
+      for (var i = 0; i < names.length; i++) {
+        var wp = w.WW_WEAPONS.filter(function (x) { return x.n === names[i]; })[0];
+        if (wp && wp.r === 5 && /限時|限时/.test(wp.src || '')) return wp.n;
+      }
+      return null;
+    }
+    /* 卡片底部：等級 / 共鳴鏈 / 專武精煉 */
+    function statLine(c, r) {
+      var sig = sigWeaponOf(c);
+      var isSig = !!(r.wep && sig && r.wep === sig);
+      var lv = r.lv || 0, m = r.m || 0, rf = r.wr || 1;
+      var tip = '等級 ' + (lv || '未養成') + '　·　共鳴鏈 M' + m + '　·　' +
+        (isSig ? '專武「' + sig + '」精煉 ' + rf
+          : (r.wep ? '目前武器「' + r.wep + '」不是專武' + (sig ? '（專武為「' + sig + '」）' : '') : '尚未設定武器'));
+      return '<div class="statline" title="' + esc(tip) + '">' +
+        '<b>' + lv + '</b><span class="u">Lv</span>' +
+        '<b class="m">' + m + '</b>' +
+        (isSig ? '<span class="p">+</span><b class="rf">' + rf + '</b>' : '<span class="p dim3">＋－</span>') +
+        '</div>';
+    }
+
     function bulkBox() {
       var list = lastList.slice();
       if (!list.length) { alert('目前篩選結果是空的，請先調整上方篩選條件。'); return; }
@@ -1317,19 +1520,16 @@
       grid.innerHTML = list.map(function (c) {
         var r = R[c.id] || {}, g = r.own ? gaps(c) : null;
         var pct = r.own ? Math.round((TOTAL_CHECKS - g.length) / TOTAL_CHECKS * 100) : 0;
+        var ov = '<span class="badge-el" style="border-color:' + EL_COLOR[c.el] + ';color:' + EL_COLOR[c.el] + '"><img src="' + esc(c.elIc) + '" alt="" onerror="this.remove()"></span>' +
+          (r.own ? '' : '<span class="badge-lv off">未擁有</span>') +
+          (r.own && !g.length ? '<span class="badge-grad">畢業</span>' : '');
         return '<div class="card r' + c.r + ' rcard' + (r.own ? '' : ' unowned') + '" data-id="' + c.id + '">' +
-          thumb(c.icon, c.name) +
-          '<span class="badge-el" style="border-color:' + EL_COLOR[c.el] + ';color:' + EL_COLOR[c.el] + '"><img src="' + esc(c.elIc) + '" alt="" onerror="this.remove()"></span>' +
-          (r.own ? '<span class="badge-lv">' + (r.lv ? 'Lv' + r.lv : '未養成') + '</span>' : '<span class="badge-lv off">未擁有</span>') +
-          (r.own && (r.m || r.wep)
-            ? '<span class="badge-mr" title="共鳴鏈 M' + (r.m || 0) +
-            (r.wep ? '　·　' + esc(r.wep) + ' 精煉 ' + (r.wr || 1) : '　·　尚未設定武器') + '">' +
-            'M' + (r.m || 0) + (r.wep ? '<em>+</em>R' + (r.wr || 1) : '') + '</span>' : '') +
-          (r.own && !g.length ? '<span class="badge-grad">畢業</span>' : '') +
+          thumb(c.icon, c.name, '', ov) +
           '<div class="cbody"><div class="cname">' + esc(c.name) + '</div>' +
-          (r.own ? '<div class="prog" title="畢業進度 ' + (TOTAL_CHECKS - g.length) + '/' + TOTAL_CHECKS + '"><i style="width:' + pct + '%"></i></div>' +
-            '<div class="gaps' + (g.length ? '' : ' okgap') + '" title="' + esc(g.map(function (x) { return x.f; }).join('、')) + '">' +
-            (g.length ? '缺 ' + esc(g[0].s) + (g.length > 1 ? ' +' + (g.length - 1) : '') : '★ 已畢業') + '</div>'
+          (r.own
+            ? '<div class="prog" title="' + esc('畢業進度 ' + (TOTAL_CHECKS - g.length) + '/' + TOTAL_CHECKS +
+              (g.length ? '　還缺：' + g.map(function (x) { return x.f; }).join('、') : '　全部完成')) + '">' +
+              '<i style="width:' + pct + '%"></i></div>' + statLine(c, r)
             : '<div class="gaps dimtxt">點一下設定</div>') +
           '</div></div>';
       }).join('') || '<div class="empty">沒有符合條件的角色</div>';
