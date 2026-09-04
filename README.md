@@ -36,7 +36,7 @@ node .claude/serve.js
 | `data/weapons.js` | 120 | 星級、類型、副詞條、90 級與初始攻擊、武器技能全文、取得途徑、武器故事、適配角色 |
 | `data/echoes.js` | 138 | 中文名、英文對照、COST、危險度、編號、所屬套裝、聲骸技能、冷卻 |
 | `data/sonatas.js` | 34 | 套裝中英文名、2／5 件效果、推薦角色 |
-| `data/ascension.js` | — | 養成計劃用：56 角色與 120 武器的**分階突破素材**、56 角色的**技能升級素材（LV.2–10）與分支節點**、144 種素材的圖示與合成家族（17 條 3 換 1 合成線） |
+| `data/ascension.js` | — | 養成計劃用：58 角色與 120 武器的**分階突破素材**、58 角色的**技能升級素材（LV.2–10）與分支節點**、145 種素材的圖示與合成家族（**19 條** 3 換 1 合成線）|
 | `data/backup/` | — | 人工整理欄位的來源（配裝／畢業面板／詞條／定位／增益／評級），重建時會自動併入 |
 
 ### 資料來源
@@ -90,7 +90,7 @@ cd tools && npm install && node update.mjs
 單獨跑某一步時，順序是：
 
 ```bash
-node scrape.mjs && node pageimgs2.mjs && node build.mjs && node fetch-images.mjs && node supp.mjs && node fetch-images.mjs && node kuro-fill.mjs && node sonata-data.mjs && node plan-data.mjs && node kuro-recommend.mjs && node classify.mjs
+node scrape.mjs && node pageimgs2.mjs && node build.mjs && node fetch-images.mjs && node supp.mjs && node fetch-images.mjs && node kuro-fill.mjs && node sonata-data.mjs && node plan-data.mjs && node merge-dupe-mats.mjs && node mats-audit.mjs && node fix-families.mjs && node item-icons.mjs && node item-icons-kuro.mjs && node sync-char-mat-icons.mjs && node kuro-recommend.mjs && node classify.mjs
 ```
 
 - `scrape.mjs`　抓 BWIKI 的角色／武器／聲骸原始 wikitext → `raw.json`
@@ -100,6 +100,12 @@ node scrape.mjs && node pageimgs2.mjs && node build.mjs && node fetch-images.mjs
 - `fetch-images.mjs`　下載所有圖片到 `../assets/img/`（已存在的會略過）
 - `kuro-fill.mjs`　用庫街區官方 API 補齊 BWIKI 缺的技能與突破素材
 - `plan-data.mjs`　產生分階突破素材 → `../data/ascension.js`（角色取自庫街區、武器取自 BWIKI，並以總量表對帳校正）
+- `merge-dupe-mats.mjs`　合併兩邊來源引號寫法不同而重複登錄的素材（否則同一樣東西會被算兩次）
+- `mats-audit.mjs`　素材登錄體檢：補上被引用卻沒登錄的、清掉檔案不存在或撞圖的圖示
+- `fix-families.mjs`　補上「共同前綴」型的合成線（聲律種核→萌芽→新葉→花蕾、海蝕嵌合體210→226→235→239）
+- `item-icons.mjs` / `item-icons-kuro.mjs`　素材圖示：**只接受檔名或表格內完全對應的來源**，對不上就不放圖。檔名由素材名稱的雜湊決定（`m_xxxxxxxx.png`），跟執行順序無關
+- `sync-char-mat-icons.mjs`　角色內頁的突破素材圖示改用同一套驗證過的圖
+- `asc-io.mjs`　`data/ascension.js` 的安全讀寫（整包解析→改→整包寫回，並在寫入前自我檢查）
 - `kuro-recommend.mjs`　套用庫街區官方配裝推薦（含「聲骸首位推薦」＝主聲骸，會先從 `data/backup/` 還原再覆蓋，可重複執行）
 - `ids.mjs`　角色代號對照（`ids.json`）；新角色用拼音自動產生代號，舊角色代號永不變動
 - `sonata-data.mjs`　從鳴潮助手更新聲骸套裝合鳴效果，會自動收錄新套裝

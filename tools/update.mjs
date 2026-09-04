@@ -17,6 +17,12 @@ const STEPS = [
   ['kuro-fill.mjs', '用庫街區官方 API 補技能／突破素材'],
   ['sonata-data.mjs', '更新聲骸套裝合鳴效果（含新套裝）'],
   ['plan-data.mjs', '產生養成計劃用的分階突破素材與技能升級素材'],
+  ['merge-dupe-mats.mjs', '合併兩邊來源寫法不同而重複登錄的素材'],
+  ['mats-audit.mjs', '素材登錄體檢（補漏、清掉對不上的圖示）'],
+  ['fix-families.mjs', '補上前綴型的合成家族（聲律、海蝕嵌合體…）'],
+  ['item-icons.mjs', '素材圖示：BWIKI 同名圖'],
+  ['item-icons-kuro.mjs', '素材圖示：庫街區補齊剩下的'],
+  ['sync-char-mat-icons.mjs', '角色內頁的突破素材圖示改用驗證過的那一套'],
   ['kuro-recommend.mjs', '套用庫街區官方配裝推薦（主聲骸首位／套裝／詞條／武器）'],
   ['classify.mjs', '產生篩選標籤，並替新角色自動補值']
 ];

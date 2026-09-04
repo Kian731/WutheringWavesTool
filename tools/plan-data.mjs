@@ -4,6 +4,7 @@
  *  另外輸出素材登錄表（圖示、合成家族與階級）
  */
 import fs from 'fs';
+import crypto from 'crypto';
 import { idMapFor, newlyAdded } from './ids.mjs';
 import path from 'path';
 import * as OpenCC from 'opencc-js';
@@ -54,7 +55,6 @@ const chars = load('data/characters.js').WW_CHARACTERS;
 
 const MATS = {};                 // 繁體名 -> {ic, fam, tier, _url, _simp}
 const downloads = [];
-let seq = 0;
 /* 先把角色頁已經有圖的素材登記進來，避免重複下載 */
 for (const c of chars) for (const a of c.asc) if (a.ic && !MATS[a.n]) MATS[a.n] = { ic: a.ic };
 
@@ -66,7 +66,10 @@ function reg(simp, url) {
     const cands = [`道具 ${simp}.png`, `道具 ${simp.replace(/[「」“”]/g, '')}.png`];
     const wikiUrl = cands.map(c => FILEMAP[c]).find(Boolean);
     const src = wikiUrl || url;
-    if (src) { m.ic = `assets/img/item/p_${String(++seq).padStart(3, '0')}.png`; downloads.push({ url: src, out: m.ic }); }
+    /* 檔名一定要由素材名稱決定。以前用遞增編號（p_001…），
+       但每次執行登錄到的素材集合會變，同一個編號在不同次代表不同素材，
+       加上下載時「檔案已存在就跳過」，舊圖就被留下來配到別的素材身上。 */
+    if (src) { m.ic = 'assets/img/item/m_' + crypto.createHash('md5').update(n).digest('hex').slice(0, 12) + '.png'; downloads.push({ url: src, out: m.ic }); }
   }
   return n;
 }
@@ -282,6 +285,23 @@ console.log('校正筆數', fixedRows);
     arr.forEach((n, i) => { if (MATS[n]) { MATS[n].fam = key; MATS[n].tier = i; } });
     famCount++;
     console.log('  合成家族：', key, '=', arr.join(' → '));
+  }
+  /* 上面認的是「共同後綴」（低頻○○聲核）。
+     還有「共同前綴」型的合成線：聲律種核→萌芽→新葉→花蕾、海蝕嵌合體210→226→235→239。 */
+  for (let plen = 5; plen >= 2; plen--) {
+    const pg = {};
+    for (const n of Object.keys(firstTier)) {
+      if (!MATS[n] || MATS[n].fam || n.length <= plen) continue;
+      (pg[n.slice(0, plen)] = pg[n.slice(0, plen)] || []).push(n);
+    }
+    for (const [key, arr] of Object.entries(pg)) {
+      if (arr.length < 3 || arr.length > 4) continue;
+      if (new Set(arr.map(n => firstTier[n])).size !== arr.length) continue;
+      arr.sort((a, b) => firstTier[a] - firstTier[b]);
+      arr.forEach((n, i) => { MATS[n].fam = key; MATS[n].tier = i; });
+      famCount++;
+      console.log('  合成家族（前綴）：', key, '=', arr.join(' → '));
+    }
   }
   console.log('辨識出的合成家族數', famCount);
 }

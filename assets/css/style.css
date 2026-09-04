@@ -620,3 +620,8 @@ label.sw.tiny input{width:13px;height:13px}
   .matgrid{column-width:auto;column-count:1}
   .matlegend{max-width:none}
 }
+
+/* 合成線上「本身不需要、但可以囤起來往上合成」的低階素材 */
+.mrow.aux{opacity:.75}
+.mrow.aux .mrn{color:var(--dim)}
+.mrs.aux{color:#8ab4ff;font-weight:600}

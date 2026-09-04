@@ -817,7 +817,9 @@
       var nd = need[n], ow = +(own[n] || 0);
       rows.push({ n: n, need: nd, own: ow, short: Math.max(0, nd - ow), craft: 0, spare: Math.max(0, ow - nd), tier: -1 });
     });
-    return rows.filter(function (r) { return r.need > 0; });
+    /* 需求為 0 的低階素材也要留在表上：它們是往上合成的原料，
+       使用者要能記錄庫存。單獨素材沒有合成關係，需求 0 就不用顯示。 */
+    return rows.filter(function (r) { return r.need > 0 || r.fam; });
   }
 
   /* ================= 頭像挑選器 ================= */
@@ -958,20 +960,29 @@
     function matGrid(rows) {
       function cell(r) {
         var m = (w.WW_ASC.mats[r.n]) || {};
-        var tip = r.n + '：需要 ' + r.need + '、持有 ' + r.own;
+        var aux = r.need === 0;                  /* 這階本身不用，純粹當合成原料 */
+        var tip = aux
+          ? r.n + '：這一階本身不需要，但每 3 個可以合成 1 個上一階。持有 ' + r.own
+          : r.n + '：需要 ' + r.need + '、持有 ' + r.own;
         var sc = 'mrs', txt;
-        if (r.short === 0) {
+        if (aux) {
+          /* 可往上合成的量要算進「下階遞補上來的」，整條線讀起來才連貫 */
+          var avail = r.own + (r.carryIn || 0), up = Math.floor(avail / 3);
+          sc += ' aux'; txt = up > 0 ? '＋' + up : '·';
+          if (r.carryIn) tip += '　下階可補 ' + r.carryIn;
+          if (up > 0) tip += '　可往上合成 ' + up + ' 個';
+        } else if (r.short === 0) {
           sc += ' ok'; txt = '✓';
           tip += r.craft > 0 ? '　庫存夠，但要在合成台合成 ' + r.craft + ' 個（消耗下階 ' + r.craft * 3 + '）' : '　已足夠';
         } else {
           sc += ' bad'; txt = r.short;
           tip += r.craft > 0 ? '　合成補 ' + r.craft + ' 個之後仍缺 ' + r.short : '　還缺 ' + r.short;
         }
-        if (r.spare > 0 && r.short === 0) tip += '　多 ' + r.spare;
-        return '<label class="mrow' + (r.short === 0 ? ' done' : '') + '" title="' + esc(tip) + '">' +
+        if (r.spare > 0 && r.short === 0 && !aux) tip += '　多 ' + r.spare;
+        return '<label class="mrow' + (aux ? ' aux' : (r.short === 0 ? ' done' : '')) + '" title="' + esc(tip) + '">' +
           '<span class="mri">' + icon(m.ic, r.n) + '</span>' +
           '<span class="mrn">' + esc(r.n) + '</span>' +
-          '<b class="mrq">' + r.need.toLocaleString() + '</b>' +
+          '<b class="mrq">' + (aux ? '—' : r.need.toLocaleString()) + '</b>' +
           '<input class="ownin" type="number" min="0" data-n="' + esc(r.n) + '" value="' + (own[r.n] || '') + '" placeholder="0">' +
           '<span class="' + sc + '">' + txt + (r.craft > 0 ? '<i class="craftdot" title="可用下階 3 換 1 補足">⚗</i>' : '') + '</span>' +
           '</label>';
