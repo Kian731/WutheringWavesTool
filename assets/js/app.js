@@ -619,7 +619,7 @@
     get: function (k, d) { try { var v = localStorage.getItem(k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
     set: function (k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) { } }
   };
-  var K_ROSTER = 'ww_roster', K_PLAN = 'ww_plan', K_OWN = 'ww_owned_mats', K_PROFILE = 'ww_profile_uid';
+  var K_ROSTER = 'ww_roster', K_PLAN = 'ww_plan', K_OWN = 'ww_owned_mats';
   /* 遊戲裡可個別升級的五個技能（延奏與固有技能不獨立升級） */
   var SK5 = [
     { k: '常態攻擊', slug: 'basic' }, { k: '共鳴技能', slug: 'skill' },
@@ -675,15 +675,13 @@
       v: 1, app: 'wuwa-guide', t: new Date().toISOString(),
       roster: Store.get(K_ROSTER, {}),
       plan: Store.get(K_PLAN, { items: [] }),
-      mats: Store.get(K_OWN, {}),
-      profile: Store.get(K_PROFILE, {})
+      mats: Store.get(K_OWN, {})
     };
   }
   function summarize(d) {
     var owned = Object.values(d.roster || {}).filter(function (r) { return r && r.own; }).length;
     return '角色 ' + owned + ' 位｜養成計劃 ' + ((d.plan && d.plan.items || []).length) +
       ' 項｜素材庫存 ' + Object.keys(d.mats || {}).length + ' 種' +
-      (d.profile && d.profile.uid ? '｜UID 已標記' : '') +
       (d.t ? '｜備份於 ' + String(d.t).slice(0, 16).replace('T', ' ') : '');
   }
   function syncBox() {
@@ -735,7 +733,6 @@
       Store.set(K_ROSTER, d.roster || {});
       Store.set(K_PLAN, d.plan || { items: [] });
       Store.set(K_OWN, d.mats || {});
-      Store.set(K_PROFILE, d.profile || {});
       say('匯入完成，重新整理中…', 1);
       setTimeout(function () { location.reload(); }, 700);
     }
@@ -1388,12 +1385,11 @@
       };
     }
 
-    /* ===== UID / 截圖引導匯入 =====
-     * 鳴潮沒有可由 UID 讀取完整角色裝備的公開 API，因此 UID 只作本機標記。
+    /* ===== 截圖引導匯入 =====
+     * 鳴潮沒有可由 UID 讀取完整角色裝備的公開 API，因此改用逐位核對匯入。
      * 截圖透過瀏覽器 File API 顯示，不會離開這台裝置，也不會寫入 localStorage。
      */
     function importBox() {
-      var profile = Store.get(K_PROFILE, {}) || {};
       var charOpts = '<option value="">請選擇角色…</option>' + w.WW_CHARACTERS.map(function (c) {
         return '<option value="' + esc(c.id) + '">' + esc(c.name) + '　' + esc(c.el) + '／' + esc(c.wp) + '</option>';
       }).join('');
@@ -1404,10 +1400,9 @@
       }).join('');
       var echoOpts = ECHO_LV.map(function (v) { return '<option value="' + v + '">+' + v + '</option>'; }).join('');
       lightbox(
-        '<h3 style="margin:0 0 4px">UID · 角色練度匯入 <span class="srcbadge auto">試用版</span></h3>' +
-        '<div class="note" style="margin:10px 0">UID 只會保存在這台裝置，用來標記你的資料；本站不會登入庫街區、讀取帳號或上傳截圖。由於目前沒有公開的完整配裝 API，請依遊戲角色頁截圖手動核對後套用。</div>' +
+        '<h3 style="margin:0 0 4px">截圖引導匯入 <span class="srcbadge auto">試用版</span></h3>' +
+        '<div class="note" style="margin:10px 0">目前無法只靠 UID 讀取角色資料。請依遊戲角色頁截圖逐位核對後填寫；本站不會登入帳號或上傳截圖。若只想快速建立大量角色，可先用「批次設定」套用共通等級。</div>' +
         '<div class="import-grid">' +
-        '<label>遊戲 UID（選填）<input id="im_uid" inputmode="numeric" maxlength="9" placeholder="9 位數 UID" value="' + esc(profile.uid || '') + '"></label>' +
         '<label>角色<select id="im_char">' + charOpts + '</select></label>' +
         '<label>角色等級<select id="im_lv">' + levelOpts + '</select></label>' +
         '<label>共鳴鏈<select id="im_m">' + mOpts + '</select></label>' +
@@ -1462,12 +1457,10 @@
         }).join('');
       };
       byId('im_apply').onclick = function () {
-        var c = chosen(), uid = byId('im_uid').value.trim();
+        var c = chosen();
         if (!c) { alert('請先選擇要匯入的角色。'); return; }
-        if (uid && !/^\d{9}$/.test(uid)) { alert('UID 應為 9 位數字；若不想記錄可留白。'); return; }
         var next = formRecord(), r = rec(c.id);
         Object.keys(next).forEach(function (k) { r[k] = next[k]; });
-        Store.set(K_PROFILE, uid ? { uid: uid, updated: new Date().toISOString() } : {});
         save(); closeLB(); render();
         alert('已套用「' + c.name + '」的資料。可在卡片點進去再逐項微調。');
       };
@@ -1605,7 +1598,7 @@
       if (sb && !sb.dataset.done) {
         sb.dataset.done = '1';
         sb.innerHTML = '<button class="btn sm" id="bulkOpen">批次設定</button>' +
-          '<button class="btn ghost sm" id="im_open">UID · 截圖匯入</button>' +
+          '<button class="btn ghost sm" id="im_open">截圖引導匯入</button>' +
           '<button class="btn ghost sm" id="sy_open">備份 · 換裝置同步</button>';
         byId('sy_open').onclick = syncBox;
         byId('bulkOpen').onclick = function () { bulkBox(); };
